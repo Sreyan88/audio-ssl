@@ -8,7 +8,7 @@ from typing import Union
 # from torchmetrics import Precision
 
 from models_delores import deloresm_encoder, slicer_encoder, deloress_encoder
-from utils import off_diagonal, concat_all_gather
+from utils import off_diagonal, concat_all_gather, Project_unfused, Classifier_unfused
 import contrastive_loss
 
 class Projection(nn.Module):
@@ -117,10 +117,18 @@ class Moco_v2(pl.LightningModule):
         self.model_type = self.arguments.model_type
         # create the encoders
         # num_classes is the output fc dimension
-        if self.model_type == "deloress":
+        if self.model_type in ["deloress","unfused"]:
             self.encoder = self.init_encoders(self.model_type)
             if self.model_type == "deloress":
                 self.p4 = Projection(2048,None)
+
+            if self.model_type == 'unfused':
+                self.p1 = Project_unfused(2048)
+                self.p2 = Project_unfused(1024)
+                self.p3 = Project_unfused(512)
+                self.softmax = nn.Softmax()
+                self.classifier = Classifier_unfused(2048, 585) #1251, 11
+                self.kl_divg = nn.KLDivLoss(reduction="batchmean")    
 
         else:    
             self.encoder_q, self.encoder_k = self.init_encoders(self.model_type)
@@ -163,9 +171,10 @@ class Moco_v2(pl.LightningModule):
             encoder_q = slicer_encoder(self.hparams.emb_dim, 128, 64, 2048)
             encoder_k = slicer_encoder(self.hparams.emb_dim, 128, 64, 2048)
             return encoder_q, encoder_k
-        elif model_type == "deloress":
+        elif model_type in ["deloress","unfused"]:
             encoder = deloress_encoder(self.hparams.emb_dim, 64, 2048)
             return encoder
+        
         
 
     @torch.no_grad()
@@ -244,7 +253,13 @@ class Moco_v2(pl.LightningModule):
     def loss_cluster(self, q_cluster, k_cluster):
         return self.criterion_cluster(q_cluster, k_cluster)
     
-    def forward(self, img_q, img_k):
+    def loss_fn(self, x, y):
+        x = F.normalize(x, dim=-1, p=2)
+        y = F.normalize(y, dim=-1, p=2)
+        l = 2 - 2 * (x * y).sum(dim=-1)
+        return l.mean()
+    
+    def forward(self, img_q=None, img_k=None):
         """
         Input:
             im_q: a batch of query images
@@ -330,46 +345,81 @@ class Moco_v2(pl.LightningModule):
             k,(k1,k2,k3) = self.encoder(img_k)
             return q, k, q1,q2,q3, k1,k2,k3
 
+        elif self.model_type == 'unfused':
+            q_raw, (q1,q2,q3) = self.encoder(img_q)
+            q_classifer = self.classifier(q_raw)
+        return q1,q2,q3,q_classifer    
+
 
     def training_step(self, batch, batch_idx):
         # in STL10 we pass in both lab+unl for online ft
         if self.trainer.datamodule.name == 'stl10':
-            # labeled_batch = batch[1]
             unlabeled_batch = batch[0]
             batch = unlabeled_batch
+        if self.model_type == 'unfused':
+            (img_1, _), label = batch
+            #print('image-1 ', img_1.shape)
+            #print('image-2 ', img_2.shape)
+            #print('label ', label.shape)
 
-        img_1, img_2 = batch
-        if self.model_type == "deloresm" or self.model_type == "moco":
-            output, target,q1,q2,q3,k1,k2,k3 = self(img_q=img_1, img_k=img_2)
-            loss = F.cross_entropy(output.float(), target.long())
-            if self.model_type == "deloresm":
-                loss= loss + self.p1(q1,k1)
-                loss= loss + self.p2(q2,k2)
-                loss= loss + self.p3(q3,k3)
+            q1,q2,q3,q_classifier = self(img_q=img_1)
+            #print('output ', output.shape)
+            #print('target ', target.shape)
+            q1_tag = self.p1(q1) #new projector for sssd
+            q2_tag = self.p2(q2) #new projector for sssd
+            q3_tag = self.p3(q3) #new projector for sssd
+            #Cross entroy loss defined
+            loss_ce1 = F.cross_entropy(q1_tag, label.long())
+            loss_ce2 = F.cross_entropy(q2_tag, label.long())
+            loss_ce3 = F.cross_entropy(q3_tag, label.long())
+            loss_ce = 0.7*loss_ce1 + 0.7*loss_ce2 + 0.7*loss_ce3 + F.cross_entropy(q_classifier, label.long())
+            #KL-divergence
+            q1_log_soft = F.log_softmax(q1_tag, dim=1)
+            q2_log_soft = F.log_softmax(q2_tag, dim=1)
+            q3_log_soft = F.log_softmax(q3_tag, dim=1)
+            targets = F.softmax(q_classifier, dim=1)
+            loss_kl = 0.3*self.kl_divg(q1_log_soft, targets)+0.3*self.kl_divg(q2_log_soft, targets)+0.3*self.kl_divg(q3_log_soft, targets)
+            #MSE_loss
+            loss_mse = 0.003*(self.loss_fn(q1_tag, q_classifier) + self.loss_fn(q2_tag, q_classifier) + self.loss_fn(q3_tag, q_classifier))
+            #final loss
+            loss_complete = loss_mse + loss_kl + loss_ce
+            log = {'train_loss': loss_complete, 'kl-loss': loss_kl, 'CE-loss': loss_ce, 'mse-loss': loss_mse}
+            # log = {'train_loss': loss, 'train_acc1': acc1, 'train_acc5': acc5}
+            self.log_dict(log)
+            return loss_complete
+        else:
+            img_1, img_2 = batch
+            if self.model_type == "deloresm" or self.model_type == "moco":
+                output, target,q1,q2,q3,k1,k2,k3 = self(img_q=img_1, img_k=img_2)
+                loss = F.cross_entropy(output.float(), target.long())
+                if self.model_type == "deloresm":
+                    loss= loss + self.p1(q1,k1)
+                    loss= loss + self.p2(q2,k2)
+                    loss= loss + self.p3(q3,k3)
+                    log = {'train_loss': loss}
+                    self.log_dict(log)
+                    return loss
+                return loss
+            elif self.model_type == "slicer":
+                output, target, q_cluster,q1,q2,q3, k_cluster,k1,k2,k3 = self(img_q=img_1, img_k=img_2)
+                output_1, target_1, q_cluster_1,q1,q2,q3, k_cluster_1,k1,k2,k3 = self(img_q=img_2, img_k=img_1)
+                loss_0 = F.cross_entropy(output.float(), target.long())
+                loss_1 = F.cross_entropy(output_1.float(), target_1.long())
+                loss_instance = (loss_0+loss_1)/2
+                #print('Main loss = {}'.format(loss_instance))
+                loss_cluster = self.loss_cluster(q_cluster, q_cluster_1)
+                #print('cluster loss = {}'.format(loss_cluster))
+                loss = loss_cluster + loss_instance
+                log = {'train_loss': loss, 'instance_loss': loss_instance, 'cluster_loss': loss_cluster}
+                self.log_dict(log)
+                return loss
+
+            elif self.model_type == "deloress":
+                q, k, q1,q2,q3, k1,k2,k3 = self(img_q=img_1, img_k=img_2)
+                loss = self.p4(q,k)
                 log = {'train_loss': loss}
                 self.log_dict(log)
                 return loss
-            return loss
-        elif self.model_type == "slicer":
-            output, target, q_cluster,q1,q2,q3, k_cluster,k1,k2,k3 = self(img_q=img_1, img_k=img_2)
-            output_1, target_1, q_cluster_1,q1,q2,q3, k_cluster_1,k1,k2,k3 = self(img_q=img_2, img_k=img_1)
-            loss_0 = F.cross_entropy(output.float(), target.long())
-            loss_1 = F.cross_entropy(output_1.float(), target_1.long())
-            loss_instance = (loss_0+loss_1)/2
-            #print('Main loss = {}'.format(loss_instance))
-            loss_cluster = self.loss_cluster(q_cluster, q_cluster_1)
-            #print('cluster loss = {}'.format(loss_cluster))
-            loss = loss_cluster + loss_instance
-            log = {'train_loss': loss, 'instance_loss': loss_instance, 'cluster_loss': loss_cluster}
-            self.log_dict(log)
-            return loss
-
-        elif self.model_type == "deloress":
-            q, k, q1,q2,q3, k1,k2,k3 = self(img_q=img_1, img_k=img_2)
-            loss = self.p4(q,k)
-            log = {'train_loss': loss}
-            self.log_dict(log)
-            return loss
             
 
 

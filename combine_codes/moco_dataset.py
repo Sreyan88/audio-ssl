@@ -37,28 +37,49 @@ def collate_fn_padd(batch):
 
 class BARLOW(Dataset):
 
-    def __init__(self, args, data_dir_list, tfms):
+    def __init__(self, args, data_dir_list, tfms, labels=None):
         self.audio_files_list = data_dir_list
         self.to_mel_spec = MelSpectrogramLibrosa()
         self.tfms = tfms
         self.length = args.length_wave
         self.norm_status = args.use_norm
+        self.model_type = args.model_type
+        self.labels = labels
 
     def __getitem__(self, idx):
-        audio_file = self.audio_files_list[idx]
-        wave,sr = librosa.core.load(audio_file, sr=AUDIO_SR)
-        wave = torch.tensor(wave)
-        
-        waveform = extract_window_torch(self.length, wave) #extract a window
+        if self.model_type == 'unfused':
+            audio_file = self.audio_files_list[idx]
+            label = self.labels[idx]
+            wave,sr = librosa.core.load(audio_file, sr=AUDIO_SR)
+            wave = torch.tensor(wave)
+            
+            waveform = extract_window_torch(self.length, wave) #extract a window
 
-        if self.norm_status == "l2":
-            waveform = f.normalize(waveform,dim=-1,p=2) #l2 normalize
+            if self.norm_status == "l2":
+                waveform = f.normalize(waveform,dim=-1,p=2) #l2 normalize
 
-        log_mel_spec = extract_log_mel_spectrogram_torch(waveform, self.to_mel_spec) #convert to logmelspec
-        log_mel_spec = log_mel_spec.unsqueeze(0)
+            log_mel_spec = extract_log_mel_spectrogram_torch(waveform, self.to_mel_spec) #convert to logmelspec
+            log_mel_spec = log_mel_spec.unsqueeze(0)
 
-        if self.tfms:
-            lms = self.tfms(log_mel_spec) #do augmentations
+            if self.tfms:
+                lms = self.tfms(log_mel_spec) #do augmentations
+
+            return lms, label
+        else:
+            audio_file = self.audio_files_list[idx]
+            wave,sr = librosa.core.load(audio_file, sr=AUDIO_SR)
+            wave = torch.tensor(wave)
+            
+            waveform = extract_window_torch(self.length, wave) #extract a window
+
+            if self.norm_status == "l2":
+                waveform = f.normalize(waveform,dim=-1,p=2) #l2 normalize
+
+            log_mel_spec = extract_log_mel_spectrogram_torch(waveform, self.to_mel_spec) #convert to logmelspec
+            log_mel_spec = log_mel_spec.unsqueeze(0)
+
+            if self.tfms:
+                lms = self.tfms(log_mel_spec) #do augmentations
 
         return lms
 
@@ -68,7 +89,7 @@ class BARLOW(Dataset):
 
 
 class BaselineDataModule(pl.LightningDataModule):
-    def __init__(self, args, tfms, train_data_dir_list='./',valid_data_dir_list='./', batch_size=8, num_workers = 8):
+    def __init__(self, args, tfms, labels='None',train_data_dir_list='./',valid_data_dir_list='./', batch_size=8, num_workers = 8):
         super().__init__()
         self.args = args
         self.data_dir_train = train_data_dir_list
@@ -77,6 +98,7 @@ class BaselineDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.transformation = tfms
         self.dataset_sizes = {}
+        self.labels = labels
 
 #         num_train = 57146
 #         indices = list(range(num_train))
@@ -88,7 +110,7 @@ class BaselineDataModule(pl.LightningDataModule):
 
     def setup(self, stage = None):
         if stage == 'fit' or stage is None:
-            self.train_dataset  = BARLOW(self.args,self.data_dir_train,self.transformation)
+            self.train_dataset  = BARLOW(self.args,self.data_dir_train,self.transformation, self.labels)
 
             # self.val_dataset = BARLOW(self.args,self.data_dir,self.transformation)
             

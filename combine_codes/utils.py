@@ -8,11 +8,35 @@ import librosa
 import tensorflow as tf
 import numpy as np
 import torch.nn.functional as F
-
+from torch import nn
 from os.path import join as path_join
 from torch.utils.data import Dataset
 from torch.utils.data.sampler import Sampler
 import random
+
+
+class Project_unfused(nn.Module):
+    def __init__(self, in_dim):
+        super().__init__()
+        sizes = [in_dim, 585, 585, 585] #1251, 11, 12
+        layers = []
+        for i in range(len(sizes) - 2):
+            layers.append(nn.Linear(sizes[i], sizes[i + 1], bias=False))
+            layers.append(nn.BatchNorm1d(sizes[i + 1]))
+            layers.append(nn.ReLU(inplace=True))
+        layers.append(nn.Linear(sizes[-2], sizes[-1], bias=False))
+        self.projector = nn.Sequential(*layers)
+    def forward(self, x):
+        return self.projector(x)
+
+class Classifier_unfused(nn.Module):
+    def __init__(self, in_dim, num_cluster):
+        super().__init__()
+        self.linear = nn.Linear(in_dim, num_cluster)
+        #self.softmax = nn.Softmax()
+
+    def forward(self, x):
+        return(self.linear(x))
 
 class MelSpectrogramLibrosa:
     """Mel spectrogram using librosa."""
