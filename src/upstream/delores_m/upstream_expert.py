@@ -52,7 +52,7 @@ class Projection(nn.Module):
 
 
 
-class Moco_v2(pl.LightningModule):
+class Upstream_Expert(pl.LightningModule):
     """
     PyTorch Lightning implementation of `Moco <https://arxiv.org/abs/2003.04297>`_
     Paper authors: Xinlei Chen, Haoqi Fan, Ross Girshick, Kaiming He.

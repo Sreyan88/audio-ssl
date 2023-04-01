@@ -33,7 +33,13 @@ class AugmentationModule:
 
 
 def main(args):
+    def _get_upstream(self):
+    init_upstream = self.init_ckpt.get('Upstream_Config')
+    if init_upstream:
+        self.args.upstream_config = init_upstream
+
     list_of_files_directory = pd.read_csv(args.input)
+
     if args.model_type == "unfused":
         labels = list(list_of_files_directory["label"])
         list_of_files_directory = list(list_of_files_directory["files"])
@@ -45,7 +51,11 @@ def main(args):
         tfms = AugmentationModule(args, (64, 96), 2 * len(list_of_files_directory))
         dm = BaselineDataModule(args, tfms, train_data_dir_list = list_of_files_directory,num_workers=40,batch_size=args.batch_size) 
     
-    model = Moco_v2(args, datamodule=dm, lamb_values = args.lamb_values)
+    module_path = f'src.upstream.{self.args.upstream}.upstream_expert'
+    expert = getattr(importlib.import_module(module_path), 'Upstream_Expert')
+    
+    
+    model = expert(args, datamodule=dm, lamb_values = args.lamb_values)
     lamb_append_term = '-'.join(np.array(args.lamb_values).astype(str))
     
     checkpoint_callback = ModelCheckpoint(

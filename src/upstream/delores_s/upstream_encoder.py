@@ -3,15 +3,15 @@ from torch import nn
 
 class DELORES_S(nn.Module):
     """
-    Encoder for our AAAI 2023 workshop paper:
+    Encoder for our AAAI 2022 workshop paper:
     Delores: Decorrelating latent spaces for low-resource audio representation learning
     https://arxiv.org/pdf/2203.13628.pdf
     """
 
-    def __init__(self, encoder, num_classes, cluster_num, n_mels, d):
+    def __init__(self, base_encoder, num_classes, cluster_num, n_mels, d):
         super().__init__()
 
-        self.encoder = encoder
+        self.encoder = base_encoder
 
     def forward(self, x):
         x = self.encoder(x)
