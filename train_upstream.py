@@ -10,52 +10,39 @@ import numpy as np
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from moco_dataset import BaselineDataModule
-from moco_model import Moco_v2
-from src.augmentations import MixupBYOLA, RandomResizeCrop, RunningNorm
-
-dist.init_process_group('gloo', init_method='file:///tmp/somefile', rank=0, world_size=1)
-class AugmentationModule:
-    """BYOL-A augmentation module example, the same parameter with the paper."""
-
-    def __init__(self, args, size, epoch_samples, log_mixup_exp=True, mixup_ratio=0.4):
-        self.train_transform = nn.Sequential(
-            MixupBYOLA(ratio=mixup_ratio, log_mixup_exp=log_mixup_exp),
-            RandomResizeCrop(virtual_crop_scale=(1.0, 1.5), freq_scale=(0.6, 1.5), time_scale=(0.6, 1.5)),
-        )
-        self.pre_norm = RunningNorm(epoch_samples=epoch_samples)
-        print('Augmentations:', self.train_transform)
-        self.norm_status = args.use_norm
-    def __call__(self, x):
-        if self.norm_status == "byol":
-            x = self.pre_norm(x)
-        return self.train_transform(x), self.train_transform(x)
-
+from src.dataset import BaselineDataModule
+from utils import AugmentationModule
 
 def main(args):
-    def _get_upstream(self):
-    init_upstream = self.init_ckpt.get('Upstream_Config')
-    if init_upstream:
-        self.args.upstream_config = init_upstream
+
+    dist.init_process_group('gloo', init_method='file:///tmp/somefile', rank=0, world_size=1)
 
     list_of_files_directory = pd.read_csv(args.input)
 
-    if args.model_type == "unfused":
+    if args.config is None:
+        with open(args.config, 'r') as file:
+            config = yaml.load(put_a_default_here, Loader=yaml.FullLoader)
+    else:
+        with open(args.config, 'r') as file:
+            config = yaml.load(file, Loader=yaml.FullLoader)
+
+    if args.upstream == "unfused":
         labels = list(list_of_files_directory["label"])
         list_of_files_directory = list(list_of_files_directory["files"])
-        tfms = AugmentationModule(args, (64, 96), 2 * len(list_of_files_directory))
-        dm = BaselineDataModule(args, tfms, train_data_dir_list = list_of_files_directory,labels=labels,num_workers=24,batch_size=args.batch_size)
+        dm = BaselineDataModule(args, tfms, train_data_dir_list = list_of_files_directory,labels=labels,num_workers=config["run"]["num_dataloader_workers"],batch_size=["run"]["batch_size"])
 
     else:
         list_of_files_directory = list(list_of_files_directory["files"])
-        tfms = AugmentationModule(args, (64, 96), 2 * len(list_of_files_directory))
-        dm = BaselineDataModule(args, tfms, train_data_dir_list = list_of_files_directory,num_workers=40,batch_size=args.batch_size) 
+        dm = BaselineDataModule(args, tfms, train_data_dir_list = list_of_files_directory,num_workers=config["run"]["num_dataloader_workers"],batch_size=["run"]["batch_size"]) 
+
+
+    tfms = AugmentationModule(args, (64, 96), 2 * len(list_of_files_directory)) #Ashish why 2*, please write logic
     
     module_path = f'src.upstream.{self.args.upstream}.upstream_expert'
     expert = getattr(importlib.import_module(module_path), 'Upstream_Expert')
     
-    
-    model = expert(args, datamodule=dm, lamb_values = args.lamb_values)
+    model = expert(args, datamodule=dm, lamb_values = config["pretrain"][])
+
     lamb_append_term = '-'.join(np.array(args.lamb_values).astype(str))
     
     checkpoint_callback = ModelCheckpoint(
@@ -70,7 +57,6 @@ def main(args):
             trainer = pl.Trainer(gpus=1,checkpoint_callback = checkpoint_callback,accelerator="ddp",resume_from_checkpoint=args.load_checkpoint)
         else:
             trainer = pl.Trainer(gpus=1,checkpoint_callback = checkpoint_callback,accelerator="ddp")
-        #,accelerator="ddp"
     else:
         trainer = pl.Trainer(checkpoint_callback = checkpoint_callback,)
     trainer.fit(model, dm)
@@ -87,7 +73,8 @@ def get_args():
     parser.add_argument("--use_norm", help="type of norm to be used", type=str,default= "byol")
     parser.add_argument('--length_wave', type=float, help='Length of wave split', default = 0.95)
     parser.add_argument('--load_checkpoint', type=str, help='load checkpoint', default = None)
-    parser.add_argument('--model_type', type=str, help='define model type', default = 'unfused')
+    parser.add_argument('-c', '--config', metavar='CONFIG_PATH', help='The yaml file for configuring the whole experiment, except the upstream model')
+    parser.add_argument('--upstream', type=str, help='define the type of upstream', default = 'unfused')
     # Add model arguments
     args = parser.parse_args()
     return args

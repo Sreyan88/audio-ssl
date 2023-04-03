@@ -1,0 +1,4 @@
+run:
+  length_wave:
+  use_norm:
+  sampling_rate: 16000
