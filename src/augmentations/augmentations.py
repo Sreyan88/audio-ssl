@@ -5,6 +5,12 @@ import torch.nn.functional as F
 import numpy as np
 import random
 
+def log_mixup_exp(xa, xb, alpha):
+    xa = xa.exp()
+    xb = xb.exp()
+    x = alpha * xa + (1. - alpha) * xb
+    return torch.log(x + torch.finfo(x.dtype).eps)
+
 class RandomResizeCrop(nn.Module):
     """Random Resize Crop block.
     Args:
@@ -55,22 +61,21 @@ class RandomResizeCrop(nn.Module):
         return format_string
 
 
-def log_mixup_exp(xa, xb, alpha):
-    xa = xa.exp()
-    xb = xb.exp()
-    x = alpha * xa + (1. - alpha) * xb
-    return torch.log(x + torch.finfo(x.dtype).eps)
+class PatchDrop(nn.Module):
+    """Add something here @Ashish
+    """
+    def __init__(self, patch_drop):
+        super().__init__()
+        self.patch_keep_ratio = 1 - patch_drop
 
-def patch_drop_aug(x, patch_drop):
-  if patch_drop > 0:
-    patch_keep = 1. - patch_drop
-    T_H = int(np.floor((x.shape[1])*patch_keep))
-    perm = torch.randperm(x.shape[1])[:T_H]  # keep class token
-    idx = torch.tensor(perm,dtype=perm.dtype, device=perm.device)
-    x = x[:, idx, :]
-  return x  
+    def forward(self, x):
+        T_H = int(np.floor((x.shape[1])*patch_keep))
+        perm = torch.randperm(x.shape[1])[:T_H]  # keep class token
+        idx = torch.tensor(perm,dtype=perm.dtype, device=perm.device)
+        x = x[:, idx, :]
+    return x  
 
-
+    
 class MixupBYOLA(nn.Module):
     """Mixup for BYOL-A.
     Args:
@@ -110,6 +115,7 @@ class MixupBYOLA(nn.Module):
 
 class Kmix(nn.Module):
     """K-mix.
+    #### Add paper details here @Ashish
     Args:
         ratio: Alpha in the paper.
         n_memory: Size of memory bank FIFO.
@@ -126,7 +132,7 @@ class Kmix(nn.Module):
 
 
     def get_index(self, x):
-        if len(self.memory_bank) < 128:
+        if len(self.memory_bank) < 128: #lets not hardcode this @Ashish
             return None
         else:
             centroids = self.centroids

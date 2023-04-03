@@ -36,7 +36,7 @@ def main(args):
         dm = BaselineDataModule(args, tfms, train_data_dir_list = list_of_files_directory,num_workers=config["run"]["num_dataloader_workers"],batch_size=["run"]["batch_size"]) 
 
 
-    tfms = AugmentationModule(args, (64, 96), 2 * len(list_of_files_directory)) #Ashish why 2*, please write logic
+    tfms = AugmentationModule(config)
     
     module_path = f'src.upstream.{self.args.upstream}.upstream_expert'
     expert = getattr(importlib.import_module(module_path), 'Upstream_Expert')
@@ -54,16 +54,19 @@ def main(args):
         
     if torch.cuda.is_available():
         if args.load_checkpoint:
-            trainer = pl.Trainer(gpus=1,checkpoint_callback = checkpoint_callback,accelerator="ddp",resume_from_checkpoint=args.load_checkpoint)
+            trainer = pl.Trainer(gpus=config["run"]["gpus"],checkpoint_callback = checkpoint_callback, accelerator="ddp",resume_from_checkpoint=args.load_checkpoint)
         else:
-            trainer = pl.Trainer(gpus=1,checkpoint_callback = checkpoint_callback,accelerator="ddp")
+            trainer = pl.Trainer(gpus=config["run"]["gpus"],checkpoint_callback = checkpoint_callback,accelerator="ddp")
     else:
         trainer = pl.Trainer(checkpoint_callback = checkpoint_callback,)
+    
     trainer.fit(model, dm)
 
 
 def get_args():
     parser = argparse.ArgumentParser(allow_abbrev=False)
+
+    # Clean the ones not required @Ashish
 
     # Add data arguments
     parser.add_argument("--input", help="path to data directory", type=str, default='/nlsasfs/home/nltm-pilot/ashishs/DECAR/libri_100_new.csv')

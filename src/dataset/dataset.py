@@ -38,6 +38,7 @@ class Basedataset(Dataset):
 
     def __init__(self, conf, data_dir_list, tfms):
 
+        self.config = conf
         self.audio_files_list = data_dir_list
         self.to_mel_spec = MelSpectrogramLibrosa()
         self.tfms = tfms
@@ -50,7 +51,7 @@ class Basedataset(Dataset):
         wave,sr = librosa.core.load(audio_file, sr=config.sampling_rate)
         wave = torch.tensor(wave)
 
-        if self.norm_status == "l2":
+        if self.config["normalization"]["l2"]:
             waveform = f.normalize(waveform,dim=-1,p=2) #l2 normalize
 
         log_mel_spec = extract_log_mel_spectrogram_torch(wave, self.to_mel_spec) #convert to logmelspec
