@@ -1,0 +1,8 @@
+run:
+  length_wave:
+  use_norm:
+  sampling_rate: 16000
+
+pretrain:
+  base_encoder: AudioNTT2020Task6
+  

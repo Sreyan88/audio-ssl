@@ -73,7 +73,7 @@ class DELORES_S(pl.LightningModule):
 
     def __init__(
         self,
-        arguments,
+        config,
         base_encoder,
         emb_dim: int = 128,
         num_negatives: int = 65536,
@@ -86,7 +86,6 @@ class DELORES_S(pl.LightningModule):
         batch_size: int = 256,
         use_mlp: bool = False,
         num_workers: int = 8,
-        lamb_values = [0.25,0.25,0.25,0.25],
         *args,
         **kwargs
     ):
@@ -111,14 +110,14 @@ class DELORES_S(pl.LightningModule):
         self.save_hyperparameters()
 
         self.arguments = arguments
-        self.model_type = self.arguments.model_type
+        self.base_encoder = self.config["pretrain"]["base_encoder"]
 
         # create the encoders
         # num_classes is the output fc dimension
-        self.encoder = self.init_encoders(self.model_type)
+        self.encoder = self.init_encoders(self.base_encoder)
         self.p = Projection(2048)  
 
-    def init_encoders(self, model_type):
+    def init_encoders(self, base_encoder):
         """
         Override to add your own encoders
         """
