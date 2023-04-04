@@ -11,7 +11,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 
 from moco_dataset import BaselineDataModule
 from moco_model import Moco_v2
-from augmentations import MixupBYOLA, RandomResizeCrop, RunningNorm
+from augmentations import MixupBYOLA, RandomResizeCrop, RunningNorm, Kmix
 import torch.distributed as dist
 
 dist.init_process_group('gloo', init_method='file:///tmp/somefile', rank=0, world_size=1)
@@ -19,8 +19,14 @@ class AugmentationModule:
     """BYOL-A augmentation module example, the same parameter with the paper."""
 
     def __init__(self, args, size, epoch_samples, log_mixup_exp=True, mixup_ratio=0.4):
-        self.train_transform = nn.Sequential(
-            MixupBYOLA(ratio=mixup_ratio, log_mixup_exp=log_mixup_exp),
+        
+        if args.mixup_type == 'kmix':
+            mixup = Kmix(ratio=mixup_ratio, log_mixup_exp=log_mixup_exp)
+        else:
+            mixup = MixupBYOLA(ratio=mixup_ratio, log_mixup_exp=log_mixup_exp)
+        
+        self.train_transform = nn.Sequential
+            mixup,
             RandomResizeCrop(virtual_crop_scale=(1.0, 1.5), freq_scale=(0.6, 1.5), time_scale=(0.6, 1.5)),
         )
         self.pre_norm = RunningNorm(epoch_samples=epoch_samples)
@@ -78,6 +84,7 @@ def get_args():
     parser.add_argument('--length_wave', type=float, help='Length of wave split', default = 0.95)
     parser.add_argument('--load_checkpoint', type=str, help='load checkpoint', default = None)
     parser.add_argument('--model_type', type=str, help='define model type', default = 'unfused')
+    parser.add_argument('--mixup_type', type=str, help='define mixup type', default = 'mixup_vanilla')
     # Add model arguments
     args = parser.parse_args()
     return args
