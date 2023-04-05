@@ -98,6 +98,75 @@ class MixupBYOLA(nn.Module):
         format_string += f',log_mixup_exp={self.log_mixup_exp})'
         return format_string
 
+class Kmix(nn.Module):
+    """K-mix.
+    #### Add paper details here @Ashish
+    Args:
+        ratio: Alpha in the paper.
+        n_memory: Size of memory bank FIFO.
+        log_mixup_exp: Use log-mixup-exp to mix if this is True, or mix without notion of log-scale.
+    """
+
+    def __init__(self, ratio=0.4, n_memory=2048, log_mixup_exp=True):
+        super().__init__()
+        self.ratio = ratio
+        self.n = n_memory
+        self.log_mixup_exp = log_mixup_exp
+        self.memory_bank = []
+        self.centroids = torch.load('tensor_data.pt')
+
+
+    def get_index(self, x):
+        if len(self.memory_bank) < 128: #lets not hardcode this @Ashish
+            return None
+        else:
+            centroids = self.centroids
+            centroids = centroids/centroids.norm(dim=-1, keepdim=True)
+            memory_avg = [self.memory_bank[i].squeeze(0).T.mean(dim=0) for i in range(len(self.memory_bank))]
+            memory_avg = torch.stack(memory_avg)
+            memory_avg = memory_avg/memory_avg.norm(dim=-1,keepdim=True)
+            centroid_pairwise_dist = torch.topk(torch.torch.cdist(centroids, centroids, p=2),k=len(centroids),dim=1).indices
+            memory_centroid_dist = torch.argmin(torch.cdist(memory_avg, centroids, p=2), dim=1)
+            point_cluster = torch.argmin(torch.cdist(x.squeeze(0).T.mean(dim=0).unsqueeze(0), centroids, p=2), dim=1)
+            l = []
+            for i in range(centroid_pairwise_dist.shape[1]):
+                flag = 0
+                for j in range(memory_centroid_dist.shape[0]):
+                    if centroid_pairwise_dist[point_cluster.tolist()[0]][i] ==  memory_centroid_dist[j]:
+                        l.append(j)
+                        flag = 1
+                if flag == 1:
+                    break
+            l = l[:128] #take top 128
+            return l[np.random.randint(len(l))]     
+
+
+    def forward(self, x):
+        # mix random
+        alpha = self.ratio * np.random.random()
+        if self.memory_bank:
+            # get z as a mixing background sound
+            if len(self.memory_bank) >= 128:
+                j = self.get_index(x)
+            else:
+                j = np.random.randint(len(self.memory_bank))
+
+            z = self.memory_bank[j]
+            # mix them
+            mixed = log_mixup_exp(x, z, 1. - alpha) if self.log_mixup_exp \
+                    else alpha * z + (1. - alpha) * x
+        else:
+            mixed = x
+        # update memory bank
+        self.memory_bank = (self.memory_bank + [x])[-self.n:]
+
+        return mixed.to(torch.float)
+
+    def __repr__(self):
+        format_string = self.__class__.__name__ + f'(ratio={self.ratio},n={self.n}'
+        format_string += f',log_mixup_exp={self.log_mixup_exp})'
+        return format_string
+
 
 class MixGaussianNoise():
     """Gaussian Noise Mixer.
