@@ -2,8 +2,6 @@ import torch
 from torch import nn
 from efficientnet_pytorch import EfficientNet
 
-from utils import off_diagonal
-
 class Efficient_Net(nn.Module):
 
     def __init__(self,args):

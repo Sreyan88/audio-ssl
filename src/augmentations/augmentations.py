@@ -73,7 +73,7 @@ class PatchDrop(nn.Module):
         perm = torch.randperm(x.shape[1])[:T_H]  # keep class token
         idx = torch.tensor(perm,dtype=perm.dtype, device=perm.device)
         x = x[:, idx, :]
-    return x  
+        return x  
 
     
 class MixupBYOLA(nn.Module):

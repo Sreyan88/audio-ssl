@@ -5,7 +5,7 @@ import torch.nn as nn
 import pytorch_lightning as pl
 from typing import Union
 
-from upstream_encoder import DELORES_S as DELORES_S_ENCODER
+from src.upstream.delores_s.upstream_encoder import DELORES_S as DELORES_S_ENCODER
 
 class Projection(nn.Module):
     def __init__(self, in_dim, lambd=5e-5, scale_loss=1/32):
@@ -48,7 +48,7 @@ class Projection(nn.Module):
 
 
 
-class DELORES_S(pl.LightningModule):
+class Upstream_Expert(pl.LightningModule):
     """
     PyTorch Lightning implementation of `Moco <https://arxiv.org/abs/2003.04297>`_
     Paper authors: Xinlei Chen, Haoqi Fan, Ross Girshick, Kaiming He.

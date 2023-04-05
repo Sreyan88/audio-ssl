@@ -1,17 +1,15 @@
 import torch
+import librosa
 import numpy as np
 import torch.utils.data as data
-import tensorflow as tf
-from torch.utils.data import Dataset, DataLoader, random_split
-import librosa
 import torch.nn.functional as f
 import pytorch_lightning as pl
+from torch.utils.data import Dataset, DataLoader, random_split
 
 from src.utils import extract_log_mel_spectrogram, extract_window, \
 extract_log_mel_spectrogram_torch, extract_window_torch, MelSpectrogramLibrosa
 
 
-tf.config.set_visible_devices([], 'GPU')
 AUDIO_SR = 16000
 
 
@@ -34,7 +32,7 @@ def collate_fn_padd(batch):
     return batch_1, batch_2
 
 
-class Basedataset(Dataset):
+class BaseDataset(Dataset):
 
     def __init__(self, conf, data_dir_list, tfms):
 
@@ -48,33 +46,39 @@ class Basedataset(Dataset):
     def __getitem__(self, idx):
 
         audio_file = self.audio_files_list[idx]
-        wave,sr = librosa.core.load(audio_file, sr=config.sampling_rate)
+        wave,sr = librosa.core.load(audio_file, sr=config.pretrain.sampling_rate)
         wave = torch.tensor(wave)
 
-        if self.config["normalization"]["l2"]:
+        if config["pretrain"]["input"]["type"] == "raw_wav":
+            waveform = extract_window_torch(self.length, wave) #extract a window
+
+        if self.config["pretrain"]["normalization"] == "l2":
             waveform = f.normalize(waveform,dim=-1,p=2) #l2 normalize
 
         log_mel_spec = extract_log_mel_spectrogram_torch(wave, self.to_mel_spec) #convert to logmelspec
 
-        log_mel_spec = log_mel_spec.T
+        if config["base_encoder"] == "MAST":
+            pass #@Ashish please fill this and with rationales beside each line
 
-        n_frames = log_mel_spec.shape[0]
+        # log_mel_spec = log_mel_spec.T
 
-        p = 1024 - n_frames
-        if p > 0:
-            m = torch.nn.ZeroPad2d((0, 0, 0, p))
-            log_mel_spec = m(log_mel_spec)
-        elif p < 0:
-            log_mel_spec = log_mel_spec[0:1024, :]
+        # n_frames = log_mel_spec.shape[0]
+
+        # p = 1024 - n_frames
+        # if p > 0:
+        #     m = torch.nn.ZeroPad2d((0, 0, 0, p))
+        #     log_mel_spec = m(log_mel_spec)
+        # elif p < 0:
+        #     log_mel_spec = log_mel_spec[0:1024, :]
 
 
         log_mel_spec = log_mel_spec.unsqueeze(0)
-        log_mel_spec = log_mel_spec.permute(0,2,1)
+        # log_mel_spec = log_mel_spec.permute(0,2,1) #@Ashish if this is particular to MASt please add if condition like above
 
         if self.tfms:
             lms = self.tfms(log_mel_spec) #do augmentations
 
-        return (lms[0].permute(0,2,1), lms[1].permute(0,2,1))
+        return lms
 
     def __len__(self):
         return len(self.audio_files_list)
@@ -99,7 +103,7 @@ class BaselineDataModule(pl.LightningDataModule):
 
         if stage == 'fit' or stage is None:
 
-            self.train_dataset  = Basedataset(self.args,self.data_dir_train,self.transformation)
+            self.train_dataset  = BaseDataset(self.args,self.data_dir_train,self.transformation)
             self.dataset_sizes['train'] = len(self.train_dataset)
             
 
@@ -112,5 +116,6 @@ class BaselineDataModule(pl.LightningDataModule):
                           drop_last =True,
                           pin_memory=True)
     
+    #@Ashish what is this used for, if not needed please remove
     def num_classes(self):
         return 2

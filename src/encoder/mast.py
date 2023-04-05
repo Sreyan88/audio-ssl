@@ -13,7 +13,6 @@ import wget
 os.environ['TORCH_HOME'] = '../../pretrained_models'
 import timm
 from timm.models.layers import to_2tuple,trunc_normal_
-from mvit.models.mvit_model import MViT
 import numpy as np
 
 
@@ -39,7 +38,7 @@ class Patch_Embed(nn.Module):
         print(x.shape)
         return x.flatten(2).transpose(1, 2), x.shape[-2:]
 
-class MASTModel(nn.Module):
+class MAST(nn.Module):
     """
     The AST model.
     :param label_dim: the label dimension, i.e., the number of total classes, it is 527 for AudioSet, 50 for ESC-50, and 35 for speechcommands v2-35
@@ -51,7 +50,7 @@ class MASTModel(nn.Module):
     :param audioset_pretrain: if use full AudioSet and ImageNet pretrained model
     :param model_size: the model size of AST, should be in [tiny224, small224, base224, base384], base224 and base 384 are same model, but are trained differently during ImageNet pretraining.
     """
-    def __init__(self, mvit_cfg, label_dim=527, fstride=10, tstride=10, input_fdim=128, input_tdim=512, imagenet_pretrain=False, audioset_pretrain=False, model_size='mvit', verbose=True):
+    def __init__(self, label_dim=527, fstride=10, tstride=10, input_fdim=128, input_tdim=512, imagenet_pretrain=False, audioset_pretrain=False, model_size='mvit', verbose=True):
 
         super(MASTModel, self).__init__()
         # assert timm.__version__ == '0.4.5', 'Please use timm == 0.4.5, the code might not be compatible with newer versions.'
@@ -226,8 +225,7 @@ class MASTModel(nn.Module):
             x, thw = blk(x, thw)
             
         # x = self.v.norm(x)
-        x = x.mean(1) #mean if no cls token
-        #x = self.mlp_head(x)
+        x = x.mean(1) # mean if no cls token
         return x
 
 if __name__ == '__main__':
