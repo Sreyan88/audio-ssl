@@ -8,10 +8,10 @@ class DELORES_S(nn.Module):
     https://arxiv.org/pdf/2203.13628.pdf
     """
     #@Ashish remove all arguments not required
-    def __init__(self, config, base_encoder, num_classes, cluster_num, n_mels, d):
+    def __init__(self, config, base_encoder):
         super().__init__()
 
-        self.encoder = base_encoder
+        self.encoder = base_encoder(config["pretrain"]["input"]["n_mels"], config["pretrain"]["base_encoder"]["output_dim"])
 
     def forward(self, x):
         x = self.encoder(x)
@@ -21,3 +21,7 @@ class DELORES_S(nn.Module):
         x = x1 + x2
 
         return x, (x_1,x_2,x_3)
+
+
+
+        

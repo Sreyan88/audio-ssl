@@ -1,9 +1,9 @@
+import torch
+import torch.nn as nn
+
 from src.encoder.audiontt import AudioNTT2020Task6
 from src.encoder.efficientnet import Efficient_Net
 from src.encoder.mast import MAST as mast
-
-
-
 
 class MAST(nn.Module):
     """

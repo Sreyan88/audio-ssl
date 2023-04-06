@@ -34,30 +34,31 @@ def collate_fn_padd(batch):
 
 class BaseDataset(Dataset):
 
-    def __init__(self, conf, data_dir_list, tfms):
+    def __init__(self, config, data_dir_list, tfms):
 
-        self.config = conf
+        self.config = config
         self.audio_files_list = data_dir_list
         self.to_mel_spec = MelSpectrogramLibrosa()
         self.tfms = tfms
-        self.length = args.length_wave
-        self.norm_status = args.use_norm
+        self.length = self.config["pretrain"]["input"]["length_wave"]
+        self.norm_status = self.config["pretrain"]["normalization"]
+        self.sampling_rate = self.config["pretrain"]["input"]["sampling_rate"]
 
     def __getitem__(self, idx):
 
         audio_file = self.audio_files_list[idx]
-        wave,sr = librosa.core.load(audio_file, sr=config.pretrain.sampling_rate)
+        wave,sr = librosa.core.load(audio_file, sr=self.sampling_rate)
         wave = torch.tensor(wave)
 
-        if config["pretrain"]["input"]["type"] == "raw_wav":
+        if self.config["pretrain"]["input"]["type"] == "raw_wav":
             waveform = extract_window_torch(self.length, wave) #extract a window
 
         if self.config["pretrain"]["normalization"] == "l2":
             waveform = f.normalize(waveform,dim=-1,p=2) #l2 normalize
 
-        log_mel_spec = extract_log_mel_spectrogram_torch(wave, self.to_mel_spec) #convert to logmelspec
+        log_mel_spec = extract_log_mel_spectrogram_torch(waveform, self.to_mel_spec) #convert to logmelspec
 
-        if config["base_encoder"] == "MAST":
+        if self.config["pretrain"]["base_encoder"] == "MAST":
             pass #@Ashish please fill this and with rationales beside each line
 
         # log_mel_spec = log_mel_spec.T
@@ -89,9 +90,9 @@ class BaseDataset(Dataset):
 
 class BaselineDataModule(pl.LightningDataModule):
 
-    def __init__(self, args, tfms, train_data_dir_list='./',valid_data_dir_list='./', batch_size=8, num_workers = 8):
+    def __init__(self, config, tfms, train_data_dir_list='./',valid_data_dir_list='./', batch_size=8, num_workers = 8):
         super().__init__()
-        self.args = args
+        self.config = config
         self.data_dir_train = train_data_dir_list
         self.data_dir_valid = valid_data_dir_list
         self.batch_size = batch_size
@@ -103,7 +104,7 @@ class BaselineDataModule(pl.LightningDataModule):
 
         if stage == 'fit' or stage is None:
 
-            self.train_dataset  = BaseDataset(self.args,self.data_dir_train,self.transformation)
+            self.train_dataset  = BaseDataset(self.config,self.data_dir_train,self.transformation)
             self.dataset_sizes['train'] = len(self.train_dataset)
             
 

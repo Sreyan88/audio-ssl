@@ -109,19 +109,19 @@ class Upstream_Expert(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        self.arguments = arguments
-        self.base_encoder = self.config["pretrain"]["base_encoder"]
+        self.config = config
+        self.base_encoder = base_encoder
 
         # create the encoders
         # num_classes is the output fc dimension
         self.encoder = self.init_encoders(self.base_encoder)
-        self.p = Projection(2048)  
+        self.p = Projection(self.config["pretrain"]["projection_dim"])  
 
     def init_encoders(self, base_encoder):
         """
         Override to add your own encoders
         """
-        encoder = DELORES_S_ENCODER(base_encoder, self.hparams.emb_dim, 64, 2048)
+        encoder = DELORES_S_ENCODER(self.config, base_encoder)
         return encoder
 
 
@@ -171,13 +171,6 @@ class Upstream_Expert(pl.LightningModule):
         idx_this = idx_unshuffle.view(num_gpus, -1)[gpu_idx]
 
         return x_gather[idx_this]
-
-    
-    def loss_fn(self, x, y):
-        x = F.normalize(x, dim=-1, p=2)
-        y = F.normalize(y, dim=-1, p=2)
-        l = 2 - 2 * (x * y).sum(dim=-1)
-        return l.mean()
     
     def forward(self, img_q=None, img_k=None):
         """

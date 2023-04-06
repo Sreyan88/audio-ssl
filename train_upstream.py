@@ -41,7 +41,7 @@ def main(args):
 
     else:
         list_of_files_directory = list(list_of_files_directory["files"])
-        dm = BaselineDataModule(args, tfms, train_data_dir_list = list_of_files_directory,num_workers=config["run"]["num_dataloader_workers"],batch_size=config["run"]["batch_size"]) 
+        dm = BaselineDataModule(config, tfms, train_data_dir_list = list_of_files_directory,num_workers=config["run"]["num_dataloader_workers"],batch_size=config["run"]["batch_size"]) 
     
     # load upstream expert
     module_path_expert = f'src.upstream.{args.upstream}.upstream_expert'
@@ -49,16 +49,16 @@ def main(args):
 
     # load base encoder
     module_path_base_encoder = f'src.encoder'
-    base_encoder = getattr(importlib.import_module(module_path_base_encoder), self.config["pretrain"]["base_encoder"])
+    base_encoder = getattr(importlib.import_module(module_path_base_encoder), config["pretrain"]["base_encoder"]["type"])
     
     model = expert(config, base_encoder=base_encoder, datamodule=dm)
 
     # @Ashish do we need lambda for every term, please check this and modularize, 
     # add to conf, also please remove from dir_path, also remove from parser
-    lamb_append_term = '-'.join(np.array(args.lamb_values).astype(str))
+    # lamb_append_term = '-'.join(np.array(args.lamb_values).astype(str))
     
     checkpoint_callback = ModelCheckpoint(
-                                dirpath=args.save_path+'chkp_{0}'.format(args.model_type)+lamb_append_term+'/',
+                                dirpath=config["run"]["save_path"]+'chkp_{0}'.format(config["pretrain"]["base_encoder"]),
                                 filename='{epoch}-{val_loss:.3f}',
                                 monitor="train_loss", 
                                 mode="min",
@@ -66,9 +66,9 @@ def main(args):
         
     if torch.cuda.is_available():
         if args.load_checkpoint:
-            trainer = pl.Trainer(gpus=config["run"]["gpus"],checkpoint_callback = checkpoint_callback, accelerator="ddp",resume_from_checkpoint=args.load_checkpoint)
+            trainer = pl.Trainer(gpus=config["run"]["world_size"], callbacks = [checkpoint_callback], accelerator="gpu", strategy="ddp", resume_from_checkpoint=args.load_checkpoint)
         else:
-            trainer = pl.Trainer(gpus=config["run"]["gpus"],checkpoint_callback = checkpoint_callback,accelerator="ddp")
+            trainer = pl.Trainer(gpus=config["run"]["world_size"], callbacks = [checkpoint_callback],accelerator="gpu", strategy="ddp")
     else:
         trainer = pl.Trainer(checkpoint_callback = checkpoint_callback,)
     
