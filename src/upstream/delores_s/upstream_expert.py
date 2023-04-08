@@ -5,6 +5,7 @@ import torch.nn as nn
 import pytorch_lightning as pl
 from typing import Union
 
+from src.utils import off_diagonal
 from src.upstream.delores_s.upstream_encoder import DELORES_S as DELORES_S_ENCODER
 
 class Projection(nn.Module):
@@ -181,10 +182,10 @@ class Upstream_Expert(pl.LightningModule):
             logits, targets
         """
 
-        q,(q1,q2,q3) = self.encoder(img_q)
-        k,(k1,k2,k3) = self.encoder(img_k)
+        q = self.encoder(img_q)
+        k = self.encoder(img_k)
 
-        return q, k, q1,q2,q3, k1,k2,k3
+        return q, k
 
 
     def training_step(self, batch, batch_idx):
@@ -194,8 +195,9 @@ class Upstream_Expert(pl.LightningModule):
             unlabeled_batch = batch[0]
             batch = unlabeled_batch
 
-        q, k, q1,q2,q3, k1,k2,k3 = self(img_q=img_1, img_k=img_2)
-        loss = self.p4(q,k)
+        img_1, img_2 = batch
+        q, k = self(img_q=img_1, img_k=img_2)
+        loss = self.p(q,k)
         log = {'train_loss': loss}
         self.log_dict(log)
         return loss

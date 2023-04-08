@@ -58,7 +58,7 @@ def main(args):
     # lamb_append_term = '-'.join(np.array(args.lamb_values).astype(str))
     
     checkpoint_callback = ModelCheckpoint(
-                                dirpath=config["run"]["save_path"]+'chkp_{0}'.format(config["pretrain"]["base_encoder"]),
+                                dirpath=config["run"]["save_path"]+'chkp',
                                 filename='{epoch}-{val_loss:.3f}',
                                 monitor="train_loss", 
                                 mode="min",

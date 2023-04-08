@@ -68,6 +68,7 @@ class AudioNTT2020Task6(nn.Module, NetworkCommonMixIn):
         self.d = d
 
     def forward(self, x):
+
         x = self.features_1(x)
 
         x_1 = x.permute(0, 3, 2, 1)
@@ -95,4 +96,7 @@ class AudioNTT2020Task6(nn.Module, NetworkCommonMixIn):
         
         x = self.fc(x)
 
-        return x
+        return x, x_1, x_2, x_3
+
+    def __repr__(self):
+        return "AudioNTT2020Task6"

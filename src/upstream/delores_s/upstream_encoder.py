@@ -14,13 +14,17 @@ class DELORES_S(nn.Module):
         self.encoder = base_encoder(config["pretrain"]["input"]["n_mels"], config["pretrain"]["base_encoder"]["output_dim"])
 
     def forward(self, x):
-        x = self.encoder(x)
+
+        if repr(self.encoder) == "AudioNTT2020Task6":
+            x, _, _, _ = self.encoder(x)
+        else:
+            pass #@Ashish please add other conditions
 
         (x1, _) = torch.max(x, dim=1)
         x2 = torch.mean(x, dim=1)
         x = x1 + x2
 
-        return x, (x_1,x_2,x_3)
+        return x
 
 
 
