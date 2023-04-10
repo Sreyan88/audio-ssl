@@ -3,23 +3,28 @@ from torch import nn
 
 class DELORES_M(nn.Module):
     """
-    Encoder for our IEEE JSTSP Special Issue paper:
-    Decorrelating feature spaces for learning general-purpose audio representations
+    Encoder for our IEEE JSTSP Paper:
+    Decorrelating Feature Spaces for Learning General-Purpose Audio Representations
     https://ieeexplore.ieee.org/document/9868132
     """
-
-    def __init__(self, encoder, num_classes, cluster_num, n_mels, d):
+    #@Ashish remove all arguments not required
+    def __init__(self, config, base_encoder):
         super().__init__()
 
-        self.encoder = encoder
-        self.fc_2 = nn.Linear(self.encoder.d,num_classes)
+        self.encoder = base_encoder(config["pretrain"]["input"]["n_mels"], config["pretrain"]["base_encoder"]["output_dim"])
+        self.fc = nn.Linear(config["pretrain"]["base_encoder"]["output_dim"], config["pretrain"]["contrastive_dim"])
 
     def forward(self, x):
-        x = self.encoder(x)
+
+        if repr(self.encoder) == "AudioNTT2020Task6":
+            x, l1, l2, l3 = self.encoder(x)
+        else:
+            raise NotImplementedError("DELORES_M currently supports just AudioNTT2020Task6 encoder")
 
         (x1, _) = torch.max(x, dim=1)
         x2 = torch.mean(x, dim=1)
         x = x1 + x2
-        x = self.fc_2(x)
 
-        return x, (x_1,x_2,x_3)
+        x = self.fc(x)
+
+        return x, l1, l2, l3

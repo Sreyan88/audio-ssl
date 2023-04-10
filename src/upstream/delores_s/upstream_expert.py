@@ -116,7 +116,7 @@ class Upstream_Expert(pl.LightningModule):
         # create the encoders
         # num_classes is the output fc dimension
         self.encoder = self.init_encoders(self.base_encoder)
-        self.p = Projection(self.config["pretrain"]["projection_dim"])  
+        self.p = Projection(self.config["pretrain"]["projection_dim"],self.config["pretrain"]["lambda_barlow"])  
 
     def init_encoders(self, base_encoder):
         """

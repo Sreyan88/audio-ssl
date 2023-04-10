@@ -17,4 +17,7 @@ class Efficient_Net(nn.Module):
         x = z.flatten(start_dim=1) #1280 (already swished)
 
         return x
+
+    def __repr__(self):
+        return "Efficient_Net"
         

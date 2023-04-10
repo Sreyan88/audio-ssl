@@ -58,8 +58,8 @@ def main(args):
     # lamb_append_term = '-'.join(np.array(args.lamb_values).astype(str))
     
     checkpoint_callback = ModelCheckpoint(
-                                dirpath=config["run"]["save_path"]+'chkp',
-                                filename='{epoch}-{val_loss:.3f}',
+                                dirpath=config["run"]["save_path"]+'_chkp',
+                                filename='{epoch}',
                                 monitor="train_loss", 
                                 mode="min",
                                 save_top_k=3)
@@ -83,7 +83,6 @@ def get_args():
     # Add data arguments
     parser.add_argument("--input", help="path to data directory", type=str, default='data/pre_train.csv')
     parser.add_argument("--batch-size", default=16, type=int, help="train batch size")
-    parser.add_argument("--lamb_values",nargs="+",help="my help message", type=float, default= [5e-5,5e-5,5e-5,5e-5])
     parser.add_argument("--save-path", help="path to saving model directory", type=str, default="./")
     parser.add_argument('--load_checkpoint', type=str, help='load checkpoint', default = None)
     parser.add_argument('-c', '--config', metavar='CONFIG_PATH', help='The yaml file for configuring the whole experiment, except the upstream model', default = None)
