@@ -28,8 +28,6 @@ def main(args):
             config = yaml.load(duc, Loader=yaml.FullLoader)
     print(config)
 
-    # @Ashish waht is this? Do we require it? If not lets remove, its not training when I add this, getting stuck
-    # dist.init_process_group('gloo', init_method='file:///tmp/somefile', rank=0, world_size=config["run"]["world_size"])
 
     # load augmentation module
     tfms = AugmentationModule(config, len(list_of_files_directory))
@@ -68,7 +66,7 @@ def main(args):
         if args.load_checkpoint:
             trainer = pl.Trainer(gpus=config["run"]["world_size"], callbacks = [checkpoint_callback], accelerator="gpu", strategy="ddp", resume_from_checkpoint=args.load_checkpoint)
         else:
-            trainer = pl.Trainer(gpus=config["run"]["world_size"], callbacks = [checkpoint_callback],accelerator="gpu", strategy="ddp")
+            trainer = pl.Trainer(gpus=config["run"]["world_size"], callbacks = [checkpoint_callback],accelerator="ddp")
     else:
         trainer = pl.Trainer(checkpoint_callback = checkpoint_callback,)
     
