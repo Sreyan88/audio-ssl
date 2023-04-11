@@ -224,6 +224,7 @@ class MAST(nn.Module):
             print(x.shape)
             x, thw = blk(x, thw)
             
+        #@Ashish please add if/else concition for this
         # x = self.v.norm(x)
         x = x.mean(1) # mean if no cls token
         return x
