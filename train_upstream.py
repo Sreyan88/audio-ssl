@@ -56,7 +56,7 @@ def main(args):
     # lamb_append_term = '-'.join(np.array(args.lamb_values).astype(str))
     
     checkpoint_callback = ModelCheckpoint(
-                                dirpath=config["run"]["save_path"]+'_chkp',
+                                dirpath=config["run"]["save_path"]+'chkp',
                                 filename='{epoch}',
                                 monitor="train_loss", 
                                 mode="min",
@@ -66,8 +66,7 @@ def main(args):
         if args.load_checkpoint:
             trainer = pl.Trainer(gpus=config["run"]["world_size"], callbacks = [checkpoint_callback], accelerator="gpu", strategy="ddp", resume_from_checkpoint=args.load_checkpoint)
         else:
-            trainer = pl.Trainer(gpus=config["run"]["world_size"], callbacks = [checkpoint_callback],accelerator="ddp")
-    else:
+            pl.Trainer(gpus=config["run"]["world_size"], callbacks = [checkpoint_callback],accelerator="gpu", strategy="ddp")    else:
         trainer = pl.Trainer(checkpoint_callback = checkpoint_callback,)
     
     trainer.fit(model, dm)

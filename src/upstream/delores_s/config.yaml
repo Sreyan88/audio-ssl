@@ -2,7 +2,7 @@ run:
   num_dataloader_workers: 4
   batch_size: 32
   world_size: 4
-  save_path: src/upstream/delores_s
+  save_path: src/upstream/delores_s/
 
 pretrain:
   base_encoder:       # options are ....
