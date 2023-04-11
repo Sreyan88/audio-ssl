@@ -7,11 +7,11 @@ class DELORES_M(nn.Module):
     Decorrelating Feature Spaces for Learning General-Purpose Audio Representations
     https://ieeexplore.ieee.org/document/9868132
     """
-    #@Ashish remove all arguments not required
+    
     def __init__(self, config, base_encoder):
         super().__init__()
 
-        self.encoder = base_encoder(config["pretrain"]["input"]["n_mels"], config["pretrain"]["base_encoder"]["output_dim"])
+        self.encoder = base_encoder(config["pretrain"]["input"]["n_mels"], config["pretrain"]["base_encoder"]["output_dim"], config["pretrain"]["base_encoder"]["return_all_layers"])
         self.fc = nn.Linear(config["pretrain"]["base_encoder"]["output_dim"], config["pretrain"]["contrastive_dim"])
 
     def forward(self, x):

@@ -8,6 +8,7 @@ pretrain:
   base_encoder:       # options are ....
     type:  AudioNTT2020Task6
     output_dim: 2048
+    return_all_layers: False
   projection_dim: 2048
   normalization: mean_var               # options mean_var (zero mean and unit variance) or l2
   lambda_barlow: 5e-5

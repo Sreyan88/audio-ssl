@@ -38,8 +38,10 @@ class AudioNTT2020Task6(nn.Module, NetworkCommonMixIn):
     """ DCASE2020 Task6 NTT Solution Audio Embedding Network.
         Borrowed from: https://github.com/nttcslab/byol-a/blob/master/byol_a/models.py """
 
-    def __init__(self, n_mels, d):
+    def __init__(self, n_mels, d, return_all_layers):
         super().__init__()
+
+        self.return_all_layers = return_all_layers
 
         self.features_1 = nn.Sequential(
             nn.Conv2d(1, 64, 3, stride=1, padding=1),
@@ -96,7 +98,10 @@ class AudioNTT2020Task6(nn.Module, NetworkCommonMixIn):
         
         x = self.fc(x)
 
-        return x, x_1, x_2, x_3
+        if self.return_all_layers:
+            return x, x_1, x_2, x_3
+
+        return x
 
     def __repr__(self):
         return "AudioNTT2020Task6"
