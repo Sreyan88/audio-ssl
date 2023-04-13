@@ -210,6 +210,14 @@ def off_diagonal(x):
     assert n == m
     return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
 
+def loss_fn_mse(x, y):
+        x = F.normalize(x, dim=-1, p=2)
+        y = F.normalize(y, dim=-1, p=2)
+        l = 2 - 2 * (x * y).sum(dim=-1)
+        #print(l)
+        #print(l.shape)
+        return l.mean()
+
 @torch.no_grad()
 def concat_all_gather(tensor):
     """
