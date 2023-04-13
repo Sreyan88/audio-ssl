@@ -1,6 +1,7 @@
 import torch
 import librosa
 import numpy as np
+import pandas as pd
 import torch.utils.data as data
 import torch.nn.functional as f
 import pytorch_lightning as pl
@@ -34,19 +35,23 @@ def collate_fn_padd(batch):
 
 class BaseDataset(Dataset):
 
-    def __init__(self, config, data_dir_list, tfms):
+    def __init__(self, config, args, data_csv, tfms):
 
         self.config = config
-        self.audio_files_list = data_dir_list
+        #self.audio_files_list = data_dir_list
         self.to_mel_spec = MelSpectrogramLibrosa()
         self.tfms = tfms
         self.length = self.config["pretrain"]["input"]["length_wave"]
         self.norm_status = self.config["pretrain"]["normalization"]
         self.sampling_rate = self.config["pretrain"]["input"]["sampling_rate"]
+        self.upstream = args.upstream
+        self.data = pd.read_csv(data_csv)
 
     def __getitem__(self, idx):
 
-        audio_file = self.audio_files_list[idx]
+        audio_file = self.data["files"][idx]
+        if self.upstream == "unfused":
+            label = self.data["label"][idx]
         wave,sr = librosa.core.load(audio_file, sr=self.sampling_rate)
         wave = torch.tensor(wave)
 
@@ -78,11 +83,12 @@ class BaseDataset(Dataset):
 
         if self.tfms:
             lms = self.tfms(log_mel_spec) #do augmentations
-
+        if self.upstream == "unfused":
+            return lms, label
         return lms
 
     def __len__(self):
-        return len(self.audio_files_list)
+        return len(self.data)
 
 
 
@@ -90,11 +96,11 @@ class BaseDataset(Dataset):
 
 class BaselineDataModule(pl.LightningDataModule):
 
-    def __init__(self, config, tfms, train_data_dir_list='./',valid_data_dir_list='./', batch_size=8, num_workers = 8):
+    def __init__(self, config, args, tfms, data_csv='./', batch_size=8, num_workers = 8):
         super().__init__()
         self.config = config
-        self.data_dir_train = train_data_dir_list
-        self.data_dir_valid = valid_data_dir_list
+        self.args = args
+        self.data_dir_train = data_csv
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.transformation = tfms
@@ -104,7 +110,7 @@ class BaselineDataModule(pl.LightningDataModule):
 
         if stage == 'fit' or stage is None:
 
-            self.train_dataset  = BaseDataset(self.config,self.data_dir_train,self.transformation)
+            self.train_dataset  = BaseDataset(self.config, self.args, self.data_dir_train, self.transformation)
             self.dataset_sizes['train'] = len(self.train_dataset)
             
 
