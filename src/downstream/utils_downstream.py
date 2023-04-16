@@ -8,13 +8,11 @@ import numpy as np
 import torch
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
-from CKA import kernel_CKA, linear_CKA
+from src.downstream.CKA import kernel_CKA, linear_CKA
+import sys
 
-#from moco_dataset import BaselineDataModule
-from moco_model import Moco_v2
-from augmentations import MixupBYOLA, RandomResizeCrop, RunningNorm
-#import torch.distributed as dist
-#dist.init_process_group('gloo', init_method='file:///tmp/somefile', rank=0, world_size=1)
+from src.downstream.augmentations import MixupBYOLA, RandomResizeCrop, RunningNorm
+
 class AugmentationModule:
     """BYOL-A augmentation module example, the same parameter with the paper."""
 
@@ -31,7 +29,22 @@ class AugmentationModule:
             x = self.pre_norm(x)
         return self.train_transform(x), self.train_transform(x)
 
+def get_logger(args):
+    logger = logging.getLogger(__name__)
+    f_handler = logging.FileHandler(os.path.join(args.exp_root,'train.log'))
+    f_handler.setLevel(logging.INFO)
+    logger.addHandler(f_handler)
+    logger.setLevel(logging.DEBUG)
+    return logger
 
+def create_exp_dir(args):
+    stats_file=None
+    args.exp_root.mkdir(parents=True, exist_ok=True)
+    if args.rank == 0:
+        stats_file = open(args.exp_root / 'downstream_stats.txt', 'a', buffering=1)
+        print(' '.join(sys.argv))
+        print(' '.join(sys.argv), file=stats_file)
+    return stats_file    
 
 def create_dir(directory):
     if not os.path.exists(directory):
@@ -49,7 +62,7 @@ def str2bool(v):
 
 def get_downstream_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--down_stream_task', default="iemocap", type=str,
+    parser.add_argument('--down_stream_task', default="speech_commands_v1", type=str,
                         help='''down_stream task name one of
                         birdsong_freefield1010 , birdsong_warblr ,
                         speech_commands_v1 , speech_commands_v2
@@ -63,12 +76,12 @@ def get_downstream_parser():
                         help='number of total epochs to run')
     parser.add_argument('--pretrain_path', default=None, type=Path,
                         help='Path to Pretrain weights')
-    parser.add_argument('--freeze', default=True, type=str2bool,
+    parser.add_argument('--freeze', default=False, type=str2bool,
                         help='Path to Pretrain weights')
     parser.add_argument('--final_pooling_type', default='Avg', type=str,
                         help='valid final pooling types are Avg,Max')
     parser.add_argument('--load_only_encoder',default = True,type =str2bool)
-    parser.add_argument('--tag',default = "pretrain_big",type =str)
+    parser.add_argument('--tag',default = "test",type =str)
     parser.add_argument('--exp-dir',default='./exp/',type=Path,help="experiment root directory")
     parser.add_argument('--lr',default=0.001,type=float,help="experiment root directory")
     parser.add_argument('--use_model', default='effnet', type=str,
@@ -77,10 +90,13 @@ def get_downstream_parser():
                         help='Which norm to use?')
     parser.add_argument('--downstream_path', default=None, type=Path,
                         help='Path to Downstream model weights')
-    parser.add_argument('--layer_prob', default=3, type=int,
+    parser.add_argument('--layer_prob', default=4, type=int,
                         help='probing the layer')
-    parser.add_argument('--arch',default = "deloresm",type =str)                    
-
+    parser.add_argument('--arch',default = "deloresm",type =str)
+    parser.add_argument('--config', default = None,type =str)                    
+    parser.add_argument('--num_workers', default = 24, type = int)
+    parser.add_argument('--dataset_train_path', default = '/speech/ashish/text_downstream.csv',type =str)
+    parser.add_argument('--dataset_test_path', default = '/speech/ashish/text_downstream.csv',type =str)
     return parser
 
 

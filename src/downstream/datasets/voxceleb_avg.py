@@ -2,12 +2,11 @@ import os
 import librosa
 import numpy as np
 import pandas as pd
-import tensorflow as tf
 import torch
 import torchaudio
 from torch.utils.data import Dataset
-from datasets.data_utils import extract_log_mel_spectrogram, extract_window, MelSpectrogramLibrosa, signal_to_frame, get_avg_duration
-from datasets.data_utils import DataUtils
+from src.downstream_updated.datasets.data_utils import extract_log_mel_spectrogram, extract_window, MelSpectrogramLibrosa, signal_to_frame, get_avg_duration
+from src.downstream_updated.datasets.data_utils import DataUtils
 import torch.nn.functional as f
 from sklearn.model_selection import train_test_split
 
