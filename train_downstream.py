@@ -47,8 +47,8 @@ def main(gpu, args):
     torch.backends.cudnn.benchmark = True # ! change it set seed
 
     
-    assert args.batch_size % args.world_size == 0
-    per_device_batch_size = args.batch_size // args.world_size
+    assert config['run']['batch_size'] % args.world_size == 0
+    per_device_batch_size = config['run']['batch_size'] // args.world_size
 
     # If the dataset is availble in HuggingFace
     if check_downstream_hf_availability(args.task) == "hf":
@@ -56,6 +56,7 @@ def main(gpu, args):
         test_dataset = DownstreamDatasetHF(args,config,split='test')
         if args.valid_csv:
             eval_dataset = DownstreamDatasetHF(args,config,split='valid')
+    # If the dataset is NOT availble in HuggingFace
     else:
         train_dataset = DownstreamDataset(args,config,split='train')
         test_dataset = DownstreamDataset(args,config,split='test',labels_dict=train_dataset.labels_dict)

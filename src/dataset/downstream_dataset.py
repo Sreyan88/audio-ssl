@@ -22,7 +22,6 @@ class DownstreamDatasetHF(Dataset):
         if ('speech_commands' in args.task) and (self.version = 'v0.02') and ('35' in args.task):
             pass
 
-        self.uttr_labels= pd.read_csv(self.feat_root)
         self.sample_rate = self.config["downstream"]["input"]["sampling_rate"]
         self.duration= self.config["run"]["duration"]
         self.labels_dict = self.get_id2label()
@@ -40,7 +39,7 @@ class DownstreamDatasetHF(Dataset):
         return id2label
 
     def __len__(self):
-        return len(self.uttr_labels)
+        return self.dataset.shape[0]
 
     def __getitem__(self, idx):
         wave_audio = self.dataset["array"][idx]
@@ -57,6 +56,7 @@ class DownstreamDatasetHF(Dataset):
         return uttr_melspec, label #return normalized
 
 class DownstreamDataset(Dataset):
+    
     def __init__(self, args, config, split, tfms=None, labels_dict=None):
         self.task = args.task
         self.split = split
@@ -80,11 +80,11 @@ class DownstreamDataset(Dataset):
         return id2label
 
     def __len__(self):
-        return len(self.uttr_labels)
+        return len(self.dataset)
 
     def __getitem__(self, idx):
-        row = self.uttr_labels.iloc[idx,:]
-        wave_audio,sr = librosa.core.load(row['AudioPath'], sr=self.sample_rate) #load file
+        row = self.dataset.iloc[idx,:]
+        wave_audio,sr = librosa.core.load(row['wav'], sr=self.sample_rate) #load file
         wave_audio = torch.tensor(wave_audio) #convert into ttorch tensor
         wave_audio = extract_window(wave_audio,data_size=duration) #extract fixes size length
         uttr_melspec = extract_log_mel_spectrogram(wave_audio, self.to_mel_spec) #convert into logmel
@@ -93,6 +93,6 @@ class DownstreamDataset(Dataset):
         if self.tfms:
             uttr_melspec=self.tfms(uttr_melspec) #if tfms present, normalize it
 
-        label = row['label']
+        label = self.labels_dict[row['label']]
 
         return uttr_melspec, label #return normalized
