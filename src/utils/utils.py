@@ -59,6 +59,16 @@ def extract_log_mel_spectrogram(waveform,
 
   return log_mel_spectrograms
 
+def check_downstream_hf_availability(task):
+
+    task_to_loc = {
+        "speech_commands_v1" : "hf",
+        "speech_commands_v2" : "hf",
+        "speech_commands_v2_35" : "hf",
+    }
+
+    return task_to_loc[task]
+
 def extract_log_mel_spectrogram_torch(waveform, to_mel_spec):
 
     log_mel_spectrograms = (to_mel_spec(waveform) + torch.finfo().eps).log()

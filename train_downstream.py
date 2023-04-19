@@ -8,15 +8,19 @@ from torch import nn
 import sys
 import importlib
 import yaml
-from src.downstream.datasets.dataset import get_dataset
-from src.downstream.downstream_encoder import ENCODER
-from src.downstream.utils_downstream import (AverageMeter, get_logger, create_exp_dir, Metric, freeze_effnet, freeze_delores, get_downstream_parser, load_pretrain_effnet, load_pretrain_deloresm, load_pretrain_delores)
-from src.augmentations import AugmentationModule
 
-def main_worker(gpu, args):
+from src.augmentations import AugmentationModule
+from src.utils import check_downstream_hf_availability
+from src.downstream.downstream_encoder import DownstreamEncoder
+from src.downstream.downstream_dataset import DownstreamDatase,DownstreamDatasetHF
+from src.downstream.utils_downstream import (AverageMeter, get_logger, create_exp_dir, \
+Metric, freeze_effnet, freeze_delores, get_downstream_parser, load_pretrain_effnet, load_pretrain_deloresm, load_pretrain_delores)
+
+
+def main(gpu, args):
 
     if args.config is None:
-        default_upstream_config = "src/downstream_updated/downstream_config.yaml"
+        default_upstream_config = "src/downstream/downstream_config.yaml"
         with open(default_upstream_config, 'r') as duc:
             config = yaml.load(duc, Loader=yaml.FullLoader)
     else:
@@ -46,7 +50,17 @@ def main_worker(gpu, args):
     assert args.batch_size % args.world_size == 0
     per_device_batch_size = args.batch_size // args.world_size
 
-    train_dataset,test_dataset = get_dataset(args, config, aug = None)
+    # If the dataset is availble in HuggingFace
+    if check_downstream_hf_availability(args.task) == "hf":
+        train_dataset = DownstreamDatasetHF(args,config,split='train')
+        test_dataset = DownstreamDatasetHF(args,config,split='test')
+        if args.valid_csv:
+            eval_dataset = DownstreamDatasetHF(args,config,split='valid')
+    else:
+        train_dataset = DownstreamDataset(args,config,split='train')
+        test_dataset = DownstreamDataset(args,config,split='test',labels_dict=train_dataset.labels_dict)
+        if args.valid_csv:
+            eval_dataset = DownstreamDataset(args,config,split='valid',labels_dict=train_dataset.labels_dict)
     
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset, shuffle=True, seed=1) #shuffle
 
@@ -59,7 +73,7 @@ def main_worker(gpu, args):
     #load base encoder
     module_path_base_encoder = f'src.encoder'
     base_encoder = getattr(importlib.import_module(module_path_base_encoder), config["downstream"]["base_encoder"]["type"])
-    model = ENCODER(config, args, base_encoder, no_of_classes=99).cuda(gpu) # need to get it from get_data function or somewhere else. 
+    model = DownstreamEncoder(config, args, base_encoder, no_of_classes=train_dataset.self.no_of_classes).cuda(gpu) # need to get it from get_data function or somewhere else. 
     model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
 
     if args.freeze:
@@ -165,17 +179,27 @@ def eval(epoch,model,loader,crit,gpu):
     stats = dict(epoch=epoch,loss=losses, accuracy = accuracy)
     return stats
 
-def main():
-    parser=get_downstream_parser()
-    args = parser.parse_args()
-    args.ngpus_per_node = torch.cuda.device_count()
+def get_args():
+    parser = argparse.ArgumentParser(allow_abbrev=False)
 
-    # single-node distributed training
+    # Clean the ones not required @Ashish
+
+    # Add data arguments
+    parser.add_argument("--task", help="path to data directory", type=str, default='speech_commands_v1')
+    parser.add_argument("--train_csv", help="path to data directory", type=str, default='/speech/ashish/test_audio_label.csv')
+    parser.add_argument("--valid_csv", help="path to data directory", type=str, default='/speech/ashish/test_audio_label.csv')
+    parser.add_argument("--test_csv", help="path to data directory", type=str, default='/speech/ashish/test_audio_label.csv')
+    parser.add_argument('--load_checkpoint', type=str, help='load checkpoint', default = None)
+    parser.add_argument('-c', '--config', metavar='CONFIG_PATH', help='The yaml file for configuring the whole experiment, except the upstream model', default = None)
+    # Add model arguments
+    args = parser.parse_args()
+    return args
+
+
+if __name__ == "__main__":
+    args = get_args()
+    args.ngpus_per_node = torch.cuda.device_count()
     args.rank = 0
     args.dist_url = 'tcp://localhost:58367'
     args.world_size = args.ngpus_per_node
-    torch.multiprocessing.spawn(main_worker, (args,), args.ngpus_per_node)
-
-
-if __name__ == '__main__':
-    main()
+    torch.multiprocessing.spawn(main, (args,), args.ngpus_per_node)

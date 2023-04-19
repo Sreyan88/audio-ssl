@@ -5,7 +5,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-class ENCODER(nn.Module):
+class DownstreamEncoder(nn.Module):
     """
     Encoder for our IEEE JSTSP Paper:
     Decorrelating Feature Spaces for Learning General-Purpose Audio Representations

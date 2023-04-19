@@ -3,9 +3,10 @@ run:
   batch_size: 32
   world_size: 4
   save_path: src/upstream/delores_m/
+  duration: 1
 
 downstream:
-  base_encoder:       # options are ....
+  base_encoder:                         # options are ....
     type:  AudioNTT2020Task6
     output_dim: 2048
     return_all_layers: True

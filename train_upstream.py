@@ -29,10 +29,6 @@ def main(args):
 
     # load augmentation module
     tfms = AugmentationModule(config, len(pd.read_csv(args.input)))
-
-    
-
-    
     
     dm = BaselineDataModule(config, args, tfms, data_csv = args.input, num_workers=config["run"]["num_dataloader_workers"], batch_size=config["run"]["batch_size"]) 
     

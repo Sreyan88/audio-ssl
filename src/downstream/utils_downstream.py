@@ -13,6 +13,17 @@ import sys
 
 from src.downstream.augmentations import MixupBYOLA, RandomResizeCrop, RunningNorm
 
+def check_hf_availability(task):
+
+    task_to_loc = {
+        "speech_commands_v1" : "hf",
+        "speech_commands_v2" : "hf",
+        "speech_commands_v2_35" : "hf",
+    }
+
+    return task_to_loc[task]
+
+
 class AugmentationModule:
     """BYOL-A augmentation module example, the same parameter with the paper."""
 
