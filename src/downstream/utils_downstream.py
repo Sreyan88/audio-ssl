@@ -111,22 +111,10 @@ def get_downstream_parser():
     return parser
 
 
-def freeze_effnet(model):
+def freeze_encoder(model):
     logger=logging.getLogger("__main__")
-    logger.info("freezing effnet weights")
-    for param in model.model_efficient.parameters():
-        param.requires_grad = False
-
-def freeze_delores(model):
-    logger=logging.getLogger("__main__")
-    logger.info("freezing moco weights")
-    for param in model.features_1.parameters():
-        param.requires_grad = False
-    for param in model.features_2.parameters():
-        param.requires_grad = False
-    for param in model.features_3.parameters():
-        param.requires_grad = False        
-    for param in model.fc.parameters():
+    logger.info("freezing encoder weights")
+    for param in model.encoder.parameters():
         param.requires_grad = False
 
 def load_pretrain_effnet(path,model,

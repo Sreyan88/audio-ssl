@@ -81,7 +81,7 @@ class BARLOW(Dataset):
         wave,sr = librosa.core.load(audio_file, sr=AUDIO_SR)
         wave = torch.tensor(wave)
 
-        #waveform = extract_window_torch(self.length, wave) #extract a window
+        waveform = extract_window_torch(self.length, wave) #extract a window
 
         if self.norm_status == "l2":
             waveform = f.normalize(waveform,dim=-1,p=2) #l2 normalize
@@ -89,16 +89,16 @@ class BARLOW(Dataset):
         log_mel_spec = extract_log_mel_spectrogram_torch(wave, self.to_mel_spec) #convert to logmelspec
 
         #print('log_mel_spec', log_mel_spec.shape)
-        log_mel_spec = log_mel_spec.T
+        # log_mel_spec = log_mel_spec.T
 
-        n_frames = log_mel_spec.shape[0]
+        # n_frames = log_mel_spec.shape[0]
 
-        p = 1024 - n_frames
-        if p > 0:
-            m = torch.nn.ZeroPad2d((0, 0, 0, p))
-            log_mel_spec = m(log_mel_spec)
-        elif p < 0:
-            log_mel_spec = log_mel_spec[0:1024, :]
+        # p = 1024 - n_frames
+        # if p > 0:
+        #     m = torch.nn.ZeroPad2d((0, 0, 0, p))
+        #     log_mel_spec = m(log_mel_spec)
+        # elif p < 0:
+        #     log_mel_spec = log_mel_spec[0:1024, :]
 
 
         log_mel_spec = log_mel_spec.unsqueeze(0)

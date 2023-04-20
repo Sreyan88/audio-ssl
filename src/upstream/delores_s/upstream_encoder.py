@@ -11,7 +11,8 @@ class DELORES_S(nn.Module):
     def __init__(self, config, base_encoder):
         super().__init__()
 
-        self.encoder = base_encoder(config["pretrain"]["input"]["n_mels"], config["pretrain"]["base_encoder"]["output_dim"], config["pretrain"]["base_encoder"]["return_all_layers"])
+        self.return_all_layers = config["pretrain"]["base_encoder"]["return_all_layers"]
+        self.encoder = base_encoder(config["pretrain"]["input"]["n_mels"], config["pretrain"]["base_encoder"]["output_dim"], self.return_all_layers)
 
     def forward(self, x):
 
@@ -20,6 +21,9 @@ class DELORES_S(nn.Module):
         else:
             raise NotImplementedError("DELORES_S currently supports just AudioNTT2020Task6 encoder")
         
+        if self.return_all_layers:
+            x = x[-1]
+
         (x1, _) = torch.max(x, dim=1)
         x2 = torch.mean(x, dim=1)
         x = x1 + x2

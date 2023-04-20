@@ -1,7 +1,6 @@
 import os
 import torch
 import librosa
-import torchaudio
 import numpy as np
 import pandas as pd
 import torch.nn.functional as f
@@ -9,28 +8,33 @@ from datasets import load_dataset
 from torch.utils.data import Dataset
 from sklearn.model_selection import train_test_split
 
-from src.utils import extract_log_mel_spectrogram, extract_window, MelSpectrogramLibrosa
+from src.utils import extract_log_mel_spectrogram, extract_window, MelSpectrogramLibrosa, select_columns
 
 class DownstreamDatasetHF(Dataset):
 
     def __init__(self, args, config, split, tfms=None):
+
+        self.config = config
         if 'speech_commands' in args.task:
             self.version = 'v0.02' if '2' in args.task else 'v0.01'
-
+            self.task = "_".join(args.task.split("_")[:2]) # To accomodate for version in input task
+        else:
+            self.task = args.task
         self.dataset = load_dataset(self.task, self.version, split = split)
 
-        if ('speech_commands' in args.task) and (self.version = 'v0.02') and ('35' in args.task):
+        if ('speech_commands' in args.task) and (self.version == 'v0.02') and ('35' in args.task):
             pass
 
         self.sample_rate = self.config["downstream"]["input"]["sampling_rate"]
-        self.duration= self.config["run"]["duration"]
+        self.duration= self.config["run"]["duration"] * self.sample_rate
         self.labels_dict = self.get_id2label()
         self.no_of_classes= len(self.labels_dict)
         self.to_mel_spec = MelSpectrogramLibrosa()
+        self.x, self.y = self.select_columns_dataset(self.task)
         self.tfms = tfms
 
     def get_id2label(self):
-        labels = speech_commands_v1["train"].features["label"].names
+        labels = self.dataset.features["label"].names
         label2id, id2label = dict(), dict()
         for i, label in enumerate(labels):
             label2id[label] = str(i)
@@ -41,17 +45,20 @@ class DownstreamDatasetHF(Dataset):
     def __len__(self):
         return self.dataset.shape[0]
 
+    def select_columns_dataset(self, task):
+        return select_columns(self.task)
+
     def __getitem__(self, idx):
-        wave_audio = self.dataset["array"][idx]
+        wave_audio = self.dataset[idx][self.x]['array']
         wave_audio = torch.tensor(wave_audio) #convert into torch tensor
-        wave_audio = extract_window(wave_audio, data_size=self.duration) #extract fixes size length
+        wave_audio = extract_window(wave_audio, duration=self.duration) #extract fixes size length
         uttr_melspec = extract_log_mel_spectrogram(wave_audio, self.to_mel_spec) #convert into logmel
         uttr_melspec=uttr_melspec.unsqueeze(0) # unsqueeze it for input to CNN
 
         if self.tfms:
             uttr_melspec=self.tfms(uttr_melspec) #if tfms present, normalize it
 
-        label = self.dataset["label"][idx]
+        label = self.dataset[idx][self.y]
 
         return uttr_melspec, label #return normalized
 

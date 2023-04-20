@@ -7,8 +7,8 @@ import torch.nn.functional as f
 import pytorch_lightning as pl
 from torch.utils.data import Dataset, DataLoader, random_split
 
-from src.utils import extract_log_mel_spectrogram, extract_window, \
-extract_log_mel_spectrogram_torch, extract_window_torch, MelSpectrogramLibrosa
+from src.utils import extract_log_mel_spectrogram, extract_window,\
+extract_window, MelSpectrogramLibrosa
 
 
 AUDIO_SR = 16000
@@ -56,12 +56,12 @@ class BaseDataset(Dataset):
         wave = torch.tensor(wave)
 
         if self.config["pretrain"]["input"]["type"] == "raw_wav":
-            waveform = extract_window_torch(self.length, wave) #extract a window
+            waveform = extract_window(self.length, wave) #extract a window
 
         if self.config["pretrain"]["normalization"] == "l2":
             waveform = f.normalize(waveform,dim=-1,p=2) #l2 normalize
 
-        log_mel_spec = extract_log_mel_spectrogram_torch(waveform, self.to_mel_spec) #convert to logmelspec
+        log_mel_spec = extract_log_mel_spectrogram(waveform, self.to_mel_spec) #convert to logmelspec
 
         if self.config["pretrain"]["base_encoder"] == "MAST":
             pass #@Ashish please fill this and with rationales beside each line

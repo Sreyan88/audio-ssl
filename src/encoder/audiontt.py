@@ -99,7 +99,7 @@ class AudioNTT2020Task6(nn.Module, NetworkCommonMixIn):
         x = self.fc(x)
 
         if self.return_all_layers:
-            return x, x_1, x_2, x_3
+            return x_1, x_2, x_3, x
 
         return x
 

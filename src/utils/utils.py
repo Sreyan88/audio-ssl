@@ -5,6 +5,7 @@ import torch
 import librosa
 import pickle
 import random
+import logging
 import argparse
 import numpy as np
 import torch.nn.functional as F
@@ -24,55 +25,22 @@ class MelSpectrogramLibrosa:
         return torch.tensor(np.matmul(self.mfb, np.abs(X)**2 + np.finfo(float).eps))
 
 
-def extract_log_mel_spectrogram(waveform,
-                                sample_rate=16000,
-                                frame_length=400,
-                                frame_step=160,
-                                fft_length=1024,
-                                n_mels=64,
-                                fmin=60.0,
-                                fmax=7800.0):
-  """Extract frames of log mel spectrogram from a raw waveform."""
-
-  stfts = tf.signal.stft(
-      waveform,
-      frame_length=frame_length,
-      frame_step=frame_step,
-      fft_length=fft_length)
-  spectrograms = tf.abs(stfts)
-
-  num_spectrogram_bins = stfts.shape[-1]
-  lower_edge_hertz, upper_edge_hertz, num_mel_bins = fmin, fmax, n_mels
-  linear_to_mel_weight_matrix = tf.signal.linear_to_mel_weight_matrix(
-      num_mel_bins, num_spectrogram_bins, sample_rate, lower_edge_hertz,
-      upper_edge_hertz)
-  mel_spectrograms = tf.tensordot(spectrograms, linear_to_mel_weight_matrix, 1)
-  mel_spectrograms.set_shape(spectrograms.shape[:-1].concatenate(
-      linear_to_mel_weight_matrix.shape[-1:]))
-
-  mel_spectrograms = tf.clip_by_value(
-      mel_spectrograms,
-      clip_value_min=1e-5,
-      clip_value_max=1e8)
-
-  log_mel_spectrograms = tf.math.log(mel_spectrograms)
-
-  return log_mel_spectrograms
-
 def check_downstream_hf_availability(task):
 
     task_to_loc = {
         "speech_commands_v1" : "hf",
         "speech_commands_v2" : "hf",
-        "speech_commands_v2_35" : "hf",
+        "speech_commands_v235" : "hf",
     }
 
     return task_to_loc[task]
 
-def extract_log_mel_spectrogram_torch(waveform, to_mel_spec):
+def extract_log_mel_spectrogram(waveform, to_mel_spec):
+    """Mel spectrogram using librosa.
+    waveform: torch tenspr waveform
+    to_mel_spec: object of MelSpectrogramLibrosa class"""
 
     log_mel_spectrograms = (to_mel_spec(waveform) + torch.finfo().eps).log()
-
     return log_mel_spectrograms
 
 def compute_features(args, dataloader, model, N): #N is total dataset size
@@ -190,18 +158,9 @@ class Logger(object):
         with open(os.path.join(self.path), 'wb') as fp:
             pickle.dump(self.data, fp, -1)
 
-def extract_window(waveform, seg_length=16000):
-  """Extracts a random segment from a waveform."""
-  padding = tf.maximum(seg_length - tf.shape(waveform)[0], 0)
-  left_pad = padding // 2
-  right_pad = padding - left_pad
-  padded_waveform = tf.pad(waveform, paddings=[[left_pad, right_pad]])
-  return tf.image.random_crop(padded_waveform, [seg_length])
-
-def extract_window_torch(length, wav, seg_length=16000):
-    
-    unit_length = int(length * 16000)
-
+def extract_window(wav, duration=16000):
+    """Extract random window of data_size second"""
+    unit_length = duration
     length_adj = unit_length - len(wav)
     if length_adj > 0:
         half_adj = length_adj // 2
@@ -213,6 +172,7 @@ def extract_window_torch(length, wav, seg_length=16000):
     wav = wav[start:start + unit_length]
 
     return wav
+
 
 def off_diagonal(x):
     # return a flattened view of the off-diagonal elements of a square matrix
@@ -240,6 +200,82 @@ def concat_all_gather(tensor):
 
     output = torch.cat(tensors_gather, dim=0)
     return output
+
+def freeze_encoder(model):
+    logger=logging.getLogger("__main__")
+    logger.info("freezing encoder weights")
+    for param in model.encoder.parameters():
+        param.requires_grad = False
+
+
+def get_logger(args):
+    logger = logging.getLogger(__name__)
+    f_handler = logging.FileHandler(os.path.join(args.exp_root,'train.log'))
+    f_handler.setLevel(logging.INFO)
+    logger.addHandler(f_handler)
+    logger.setLevel(logging.DEBUG)
+    return logger
+
+def create_exp_dir(args):
+    stats_file=None
+    args.exp_root.mkdir(parents=True, exist_ok=True)
+    if args.rank == 0:
+        stats_file = open(args.exp_root / 'downstream_stats.txt', 'a', buffering=1)
+        print(' '.join(sys.argv))
+        print(' '.join(sys.argv), file=stats_file)
+    return stats_file 
+
+def load_pretrained_encoder(model,ckpt_path):
+    pass
+    #@Ashish please write a generic function and set strict=False and please also test
+
+class Metric(object):
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val):
+        if isinstance(val, (torch.Tensor)):
+            val = val.numpy()
+            self.val = val
+            self.sum += np.sum(val)
+            self.count += np.size(val)
+        self.avg = self.sum / self.count
+
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
+def select_columns(task):
+    task2x = {
+        'speech_commands': 'audio'
+    }
+
+    task2y = {
+        'speech_commands': 'label'
+    }
+
+    return task2x[task], task2y[task]
+
 
 def get_upstream_parser():
     parser = argparse.ArgumentParser()

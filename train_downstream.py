@@ -1,21 +1,20 @@
-import logging
 import os
 import time
 import json
-import matplotlib.pyplot as plt
-import torch
-from torch import nn
 import sys
-import importlib
 import yaml
+import importlib
+import argparse
+import torch
+import logging
+from torch import nn
+import matplotlib.pyplot as plt
 
 from src.augmentations import AugmentationModule
 from src.utils import check_downstream_hf_availability
 from src.downstream.downstream_encoder import DownstreamEncoder
-from src.downstream.downstream_dataset import DownstreamDatase,DownstreamDatasetHF
-from src.downstream.utils_downstream import (AverageMeter, get_logger, create_exp_dir, \
-Metric, freeze_effnet, freeze_delores, get_downstream_parser, load_pretrain_effnet, load_pretrain_deloresm, load_pretrain_delores)
-
+from src.dataset.downstream_dataset import DownstreamDataset,DownstreamDatasetHF
+from src.utils import freeze_encoder, load_pretrained_encoder, get_logger, create_exp_dir, AverageMeter, Metric
 
 def main(gpu, args):
 
@@ -33,13 +32,13 @@ def main(gpu, args):
         backend='nccl', init_method=args.dist_url,
         world_size=args.world_size, rank=args.rank)
     stats_file=None
-    args.exp_root = args.exp_dir / args.tag
+    args.exp_root = config['run']['save_path'] + "/" + args.task
 
-    stats_file=create_exp_dir(args)
+    if not os.path.isdir(args.exp_root):
+        os.mkdir(args.exp_root)
 
-    args.exp_root.mkdir(parents=True, exist_ok=True)
     if args.rank == 0:
-        stats_file = open(args.exp_root / 'downstream_stats.txt', 'a', buffering=1)
+        stats_file = open(args.exp_root + '/downstream_stats.txt', 'a', buffering=1)
         print(' '.join(sys.argv))
         print(' '.join(sys.argv), file=stats_file)
     logger = get_logger(args)
@@ -55,40 +54,44 @@ def main(gpu, args):
         train_dataset = DownstreamDatasetHF(args,config,split='train')
         test_dataset = DownstreamDatasetHF(args,config,split='test')
         if args.valid_csv:
-            eval_dataset = DownstreamDatasetHF(args,config,split='valid')
+            eval_dataset = DownstreamDatasetHF(args,config,split='validation')
     # If the dataset is NOT availble in HuggingFace
     else:
         train_dataset = DownstreamDataset(args,config,split='train')
         test_dataset = DownstreamDataset(args,config,split='test',labels_dict=train_dataset.labels_dict)
         if args.valid_csv:
-            eval_dataset = DownstreamDataset(args,config,split='valid',labels_dict=train_dataset.labels_dict)
+            eval_dataset = DownstreamDataset(args,config,split='validation',labels_dict=train_dataset.labels_dict)
     
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset, shuffle=True, seed=1) #shuffle
 
     train_loader = torch.utils.data.DataLoader(train_dataset,batch_size=per_device_batch_size,
-                                                pin_memory=True,sampler = train_sampler,num_workers=24)
+                                                pin_memory=True,sampler = train_sampler,num_workers=0)
 
-    test_loader = torch.utils.data.DataLoader(test_dataset,batch_size=args.batch_size,
-                                                pin_memory=True, num_workers=24)
+    test_loader = torch.utils.data.DataLoader(test_dataset,batch_size=per_device_batch_size,
+                                                pin_memory=True, num_workers=0)
+
+    # override the encoder if encoder is specified
+    if args.encoder is not None:
+        config['downstream']['base_encoder']['type'] = args.encoder
 
     #load base encoder
     module_path_base_encoder = f'src.encoder'
     base_encoder = getattr(importlib.import_module(module_path_base_encoder), config["downstream"]["base_encoder"]["type"])
-    model = DownstreamEncoder(config, args, base_encoder, no_of_classes=train_dataset.self.no_of_classes).cuda(gpu) # need to get it from get_data function or somewhere else. 
+    model = DownstreamEncoder(config, args, base_encoder, no_of_classes=train_dataset.no_of_classes).cuda(gpu) # need to get it from get_data function or somewhere else. 
     model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
-
+    
+    if args.checkpoint is not None:
+        #@Ashish please test this function after wirting it and also check if this is the correct location for this function call
+        load_pretrained_encoder(model,args.checkpoint)
     if args.freeze:
-        if config["downstream"]["base_encoder"]["type"] == "effnet":
-            freeze_effnet(model)
-        elif config["downstream"]["base_encoder"]["type"] == "audiontt":
-            freeze_delores(model)
+        freeze_encoder(model)
 
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[gpu])
 
     criterion = nn.CrossEntropyLoss().cuda(gpu)
     optimizer = torch.optim.Adam(
         filter(lambda x: x.requires_grad, model.parameters()),
-        lr=args.lr,
+        lr=config['run']['lr'],
     )
 
     if args.rank == 0 : logger.info("started training")
@@ -98,7 +101,7 @@ def main(gpu, args):
     test_accuracy = []
     test_losses=[]
 
-    for epoch in range(0, args.epochs):
+    for epoch in range(0, config["run"]["epochs"]):
         train_sampler.set_epoch(epoch)
         train_stats = train_one_epoch(train_loader, model, criterion, optimizer, epoch,gpu,args)
 
@@ -135,8 +138,8 @@ def train_one_epoch(loader, model, crit, opt, epoch,gpu,args):
     for i, (input_tensor, target) in enumerate(loader):
         data_time.update(time.time() - end)
 
-        output = model(input_tensor.cuda(gpu, non_blocking=True))
-        loss = crit(output, target.cuda(gpu, non_blocking=True))
+        output = model(input_tensor.float().to(gpu))
+        loss = crit(output, target.to(gpu))
 
         losses.update(loss.data, input_tensor.size(0))
         opt.zero_grad()
@@ -187,10 +190,12 @@ def get_args():
 
     # Add data arguments
     parser.add_argument("--task", help="path to data directory", type=str, default='speech_commands_v1')
-    parser.add_argument("--train_csv", help="path to data directory", type=str, default='/speech/ashish/test_audio_label.csv')
-    parser.add_argument("--valid_csv", help="path to data directory", type=str, default='/speech/ashish/test_audio_label.csv')
-    parser.add_argument("--test_csv", help="path to data directory", type=str, default='/speech/ashish/test_audio_label.csv')
-    parser.add_argument('--load_checkpoint', type=str, help='load checkpoint', default = None)
+    parser.add_argument("--train_csv", help="path to data directory", type=str, default='./data/train.csv')
+    parser.add_argument("--valid_csv", help="path to data directory", type=str, default=None)
+    parser.add_argument("--test_csv", help="path to data directory", type=str, default='./data/test.csv')
+    parser.add_argument('--checkpoint', type=str, help='path to pre-trained checkpoint', default = None)
+    parser.add_argument('--encoder', type=str, help='type of encoder you want to use', default = 'AudioNTT2020Task6')
+    parser.add_argument('--freeze', type=bool, help='if you want to freeze the encoder for downstream fine-tuning', default = True)
     parser.add_argument('-c', '--config', metavar='CONFIG_PATH', help='The yaml file for configuring the whole experiment, except the upstream model', default = None)
     # Add model arguments
     args = parser.parse_args()
