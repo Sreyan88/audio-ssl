@@ -65,6 +65,7 @@ class DownstreamDatasetHF(Dataset):
 class DownstreamDataset(Dataset):
     
     def __init__(self, args, config, split, tfms=None, labels_dict=None):
+        self.config = config
         self.task = args.task
         self.split = split
         if self.split == 'train':
@@ -72,10 +73,10 @@ class DownstreamDataset(Dataset):
         elif self.split == 'valid':
             self.dataset= pd.read_csv(args.valid_csv)
         elif self.split == 'test':
-            self.dataset= pd.read_csv(args.valid_csv)
+            self.dataset= pd.read_csv(args.test_csv)
         self.sample_rate = self.config["downstream"]["input"]["sampling_rate"]
         self.duration= self.config["run"]["duration"]
-        self.labels_dict = self.get_label2id(self.dataset) if labels_dict is None else labels_dict
+        self.labels_dict = self.get_label2id() if labels_dict is None else labels_dict
         self.no_of_classes= len(self.labels_dict)
         self.to_mel_spec = MelSpectrogramLibrosa()
         self.tfms = tfms
@@ -93,7 +94,7 @@ class DownstreamDataset(Dataset):
         row = self.dataset.iloc[idx,:]
         wave_audio,sr = librosa.core.load(row['wav'], sr=self.sample_rate) #load file
         wave_audio = torch.tensor(wave_audio) #convert into ttorch tensor
-        wave_audio = extract_window(wave_audio,data_size=duration) #extract fixes size length
+        wave_audio = extract_window(wave_audio,data_size=self.duration) #extract fixes size length
         uttr_melspec = extract_log_mel_spectrogram(wave_audio, self.to_mel_spec) #convert into logmel
         uttr_melspec=uttr_melspec.unsqueeze(0) #unsqueeze it
 

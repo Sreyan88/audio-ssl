@@ -7,7 +7,7 @@ from typing import Union
 #from pl_bolts.metrics import mean, precision_at_k
 # from torchmetrics import Precision
 
-from src.utils import off_diagonal
+from src.utils import off_diagonal, concat_all_gather
 from src.upstream.delores_m.upstream_encoder import DELORES_M as DELORES_M_ENCODER
 
 class Projection(nn.Module):
@@ -156,7 +156,8 @@ class Upstream_Expert(pl.LightningModule):
     @torch.no_grad()
     def _dequeue_and_enqueue(self, keys):
         # gather keys before updating queue
-        if self.trainer.strategy =="ddp":
+        #if self.trainer.strategy =="ddp":
+        if self.trainer.use_ddp or self.trainer.use_ddp2:
             keys = concat_all_gather(keys)
 
         batch_size = keys.shape[0]
@@ -233,12 +234,14 @@ class Upstream_Expert(pl.LightningModule):
         with torch.no_grad():  # no gradient to keys
             self._momentum_update_key_encoder()  # update the key encoder
             # shuffle for making use of BN
-            if self.trainer.strategy =="ddp":
+            #if self.trainer.strategy =="ddp":
+            if self.trainer.use_ddp or self.trainer.use_ddp2:
                 img_k, idx_unshuffle = self._batch_shuffle_ddp(img_k)
             k, k1, k2, k3 = self.encoder_k(img_k)  # keys: NxC
             k = nn.functional.normalize(k, dim=1)
             # undo shuffle
-            if self.trainer.strategy =="ddp":
+            #if self.trainer.strategy =="ddp":
+            if self.trainer.use_ddp or self.trainer.use_ddp2:
                 k = self._batch_unshuffle_ddp(k, idx_unshuffle)
         
         # compute logits

@@ -115,7 +115,7 @@ class MixupBYOLA(nn.Module):
 
 class Kmix(nn.Module):
     """K-mix.
-    #### Add paper details here @Ashish
+    paper: https://arxiv.org/abs/2211.01519
     Args:
         ratio: Alpha in the paper.
         n_memory: Size of memory bank FIFO.

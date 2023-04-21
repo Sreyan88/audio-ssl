@@ -56,7 +56,7 @@ class BaseDataset(Dataset):
         wave = torch.tensor(wave)
 
         if self.config["pretrain"]["input"]["type"] == "raw_wav":
-            waveform = extract_window(self.length, wave) #extract a window
+            waveform = extract_window(wave, data_size=self.length) #extract a window
 
         if self.config["pretrain"]["normalization"] == "l2":
             waveform = f.normalize(waveform,dim=-1,p=2) #l2 normalize
@@ -122,7 +122,4 @@ class BaselineDataModule(pl.LightningDataModule):
                           num_workers=self.num_workers,
                           drop_last =True,
                           pin_memory=True)
-    
-    #@Ashish what is this used for, if not needed please remove
-    def num_classes(self):
-        return 2
+

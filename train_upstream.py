@@ -51,17 +51,18 @@ def main(args):
                                 filename='{epoch}',
                                 monitor="train_loss", 
                                 mode="min",
-                                save_top_k=3)
+                                save_top_k=1)
         
     if torch.cuda.is_available():
         if args.load_checkpoint:
             trainer = pl.Trainer(gpus=config["run"]["world_size"], callbacks = [checkpoint_callback], accelerator="gpu", strategy="ddp", resume_from_checkpoint=args.load_checkpoint)
         else:
-            trainer = pl.Trainer(gpus=config["run"]["world_size"], callbacks = [checkpoint_callback], accelerator="ddp")
+            trainer = pl.Trainer(gpus=config["run"]["world_size"], callbacks = [checkpoint_callback], max_epochs=1)
     else:
         trainer = pl.Trainer(checkpoint_callback = checkpoint_callback,)
     
     trainer.fit(model, dm)
+    trainer.save_checkpoint("/speech/ashish/example_test.ckpt")
 
 
 def get_args():
@@ -70,10 +71,10 @@ def get_args():
     # Clean the ones not required @Ashish
 
     # Add data arguments
-    parser.add_argument("--input", help="path to data directory", type=str, default='/speech/ashish/test_audio_label.csv')
+    parser.add_argument("--input", help="path to data directory", type=str, default='/speech/ashish/test_audio.csv')
     parser.add_argument('--load_checkpoint', type=str, help='load checkpoint', default = None)
     parser.add_argument('-c', '--config', metavar='CONFIG_PATH', help='The yaml file for configuring the whole experiment, except the upstream model', default = None)
-    parser.add_argument('--upstream', type=str, help='define the type of upstream', default = 'unfused')
+    parser.add_argument('--upstream', type=str, help='define the type of upstream', default = 'delores_m')
     # Add model arguments
     args = parser.parse_args()
     return args

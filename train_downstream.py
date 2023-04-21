@@ -9,12 +9,12 @@ import torch
 import logging
 from torch import nn
 import matplotlib.pyplot as plt
-
+from pathlib import Path
 from src.augmentations import AugmentationModule
 from src.utils import check_downstream_hf_availability
 from src.downstream.downstream_encoder import DownstreamEncoder
 from src.dataset.downstream_dataset import DownstreamDataset,DownstreamDatasetHF
-from src.utils import freeze_encoder, load_pretrained_encoder, get_logger, create_exp_dir, AverageMeter, Metric
+from src.utils import freeze_encoder, get_logger, create_exp_dir, AverageMeter, Metric, load_pretrained_encoder
 
 def main(gpu, args):
 
@@ -32,13 +32,11 @@ def main(gpu, args):
         backend='nccl', init_method=args.dist_url,
         world_size=args.world_size, rank=args.rank)
     stats_file=None
-    args.exp_root = config['run']['save_path'] + "/" + args.task
-
-    if not os.path.isdir(args.exp_root):
-        os.mkdir(args.exp_root)
-
+    args.exp_root = args.exp_dir / args.task
+    args.exp_root.mkdir(parents=True, exist_ok=True)
+    
     if args.rank == 0:
-        stats_file = open(args.exp_root + '/downstream_stats.txt', 'a', buffering=1)
+        stats_file = open(args.exp_root / 'downstream_stats.txt', 'a', buffering=1)
         print(' '.join(sys.argv))
         print(' '.join(sys.argv), file=stats_file)
     logger = get_logger(args)
@@ -77,17 +75,20 @@ def main(gpu, args):
     #load base encoder
     module_path_base_encoder = f'src.encoder'
     base_encoder = getattr(importlib.import_module(module_path_base_encoder), config["downstream"]["base_encoder"]["type"])
-    model = DownstreamEncoder(config, args, base_encoder, no_of_classes=train_dataset.no_of_classes).cuda(gpu) # need to get it from get_data function or somewhere else. 
+    model = DownstreamEncoder(config, args, base_encoder, no_of_classes=train_dataset.no_of_classes).cuda(gpu) 
     model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
-    
-    if args.checkpoint is not None:
-        #@Ashish please test this function after wirting it and also check if this is the correct location for this function call
-        load_pretrained_encoder(model,args.checkpoint)
+
     if args.freeze:
         freeze_encoder(model)
-
+    
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[gpu])
 
+    if args.checkpoint is not None:
+        #@Ashish please test this function after wirting it and also check if this is the correct location for this function call
+        #Working need to make it work for ddp pretraining
+        load_pretrained_encoder(model,args)
+    
+    
     criterion = nn.CrossEntropyLoss().cuda(gpu)
     optimizer = torch.optim.Adam(
         filter(lambda x: x.requires_grad, model.parameters()),
@@ -189,14 +190,16 @@ def get_args():
     # Clean the ones not required @Ashish
 
     # Add data arguments
-    parser.add_argument("--task", help="path to data directory", type=str, default='speech_commands_v1')
-    parser.add_argument("--train_csv", help="path to data directory", type=str, default='./data/train.csv')
+    parser.add_argument("--task", help="path to data directory", type=str, default='test_task')
+    parser.add_argument("--train_csv", help="path to data directory", type=str, default='/speech/ashish/test_label_data.csv')
     parser.add_argument("--valid_csv", help="path to data directory", type=str, default=None)
-    parser.add_argument("--test_csv", help="path to data directory", type=str, default='./data/test.csv')
-    parser.add_argument('--checkpoint', type=str, help='path to pre-trained checkpoint', default = None)
+    parser.add_argument("--test_csv", help="path to data directory", type=str, default='/speech/ashish/test_label_data.csv')
+    parser.add_argument('--checkpoint', type=str, help='path to pre-trained checkpoint', default = '/speech/ashish/example_test.ckpt')
     parser.add_argument('--encoder', type=str, help='type of encoder you want to use', default = 'AudioNTT2020Task6')
     parser.add_argument('--freeze', type=bool, help='if you want to freeze the encoder for downstream fine-tuning', default = True)
-    parser.add_argument('-c', '--config', metavar='CONFIG_PATH', help='The yaml file for configuring the whole experiment, except the upstream model', default = None)
+    parser.add_argument('--exp_dir',default='./exp',type=Path,help="experiment root directory")
+    parser.add_argument('--upstream', type=str, help='define the type of upstream', default = 'delores_m')
+    parser.add_argument('-c', '--config', metavar='CONFIG_PATH', help='The yaml file for configuring the whole experiment, except the upstream model', default = "src/downstream/downstream_config.yaml")
     # Add model arguments
     args = parser.parse_args()
     return args
