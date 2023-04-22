@@ -84,7 +84,6 @@ def main(gpu, args):
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[gpu])
 
     if args.checkpoint is not None:
-        #@Ashish please test this function after wirting it and also check if this is the correct location for this function call
         #Working need to make it work for ddp pretraining
         load_pretrained_encoder(model,args)
     
@@ -187,8 +186,6 @@ def eval(epoch,model,loader,crit,gpu):
 def get_args():
     parser = argparse.ArgumentParser(allow_abbrev=False)
 
-    # Clean the ones not required @Ashish
-
     # Add data arguments
     parser.add_argument("--task", help="path to data directory", type=str, default='test_task')
     parser.add_argument("--train_csv", help="path to data directory", type=str, default='/speech/ashish/test_label_data.csv')
@@ -200,7 +197,6 @@ def get_args():
     parser.add_argument('--exp_dir',default='./exp',type=Path,help="experiment root directory")
     parser.add_argument('--upstream', type=str, help='define the type of upstream', default = 'delores_m')
     parser.add_argument('-c', '--config', metavar='CONFIG_PATH', help='The yaml file for configuring the whole experiment, except the upstream model', default = "src/downstream/downstream_config.yaml")
-    # Add model arguments
     args = parser.parse_args()
     return args
 
