@@ -28,15 +28,13 @@ If the task is supported by `HuggingFace🤗` datasets library, the script autom
 
 Also feel free to remove the `--ckpt` argument if you want to train an encoder on your downstream encoder from *scratch* (no SSL pre-training).
 
-### Contribution Guidelines
+## Contribution Guidelines
 If you want to contribute (models or algorithms or a completely new feature!) please feel free to open an issue followed by a pull-request.
 
-### Found a bug?
+## Found a bug?
 Please raise an issue and we will try our best to resolve it as-soon-as-possible!
 
-### Contributors
-
-### Cite
+## Cite
 If you find this toolkit useful, please consider citing following papers.
 
 If you have used the **LAPE** toolkit in your experiments, or the **DeLoRes-S** or **DeLoRes-M** SSL pre-training algorithms:
